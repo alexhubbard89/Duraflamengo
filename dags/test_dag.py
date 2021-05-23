@@ -1,3 +1,9 @@
+## Test: 
+# 1) file imporats
+# 2) web scrapping
+# 3) running spark notebook
+
+
 import datetime as dt
 import logging
 import json
