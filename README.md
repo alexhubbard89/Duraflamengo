@@ -23,3 +23,6 @@ TODO:
 ``` 
 
 After chaning dag files make sure to copy it to the dag bag: `cp {NEW_DAG_FILE}.py ~/airflow/dags/`
+
+To start the server: `airflow webserver`
+To start the scheduler: `airflow scheduler`
