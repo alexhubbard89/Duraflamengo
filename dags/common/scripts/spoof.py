@@ -34,7 +34,7 @@ class Ip_Spoofer(object):
                 port = str(self.ip_df.loc[0, 'port'])
                 s = requests.session()
                 proxies = {
-                  'http': '{}:{}'.format(ip, port),
+                    'http': '{}:{}'.format(ip, port),
                 }
                 s.proxies.update(proxies)
                 a = requests.adapters.HTTPAdapter(max_retries=5)
