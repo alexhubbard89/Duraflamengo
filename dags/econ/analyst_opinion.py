@@ -32,6 +32,10 @@ def open_connection():
     return connection
 engine = create_engine(os.environ["DATABASE_URL"], use_batch_mode=True)
 
+## get global vars
+from airflow.models import Variable
+sm_data_lake_dir = Variable.get("sm_data_lake_dir")
+
 
 def get_marketwatch(ticker):
     ## request page
@@ -109,19 +113,21 @@ def prep_marketwatch(df_list):
         df[col] = df[col].astype(float)
     return df
         
-def write_spark(spark, df, data_dir, subdir, date):
+def write_spark(spark, df, subdir, date):
     df_sp = spark.createDataFrame(df)
-    file_path = '{}/{}/{}'.format(data_dir, subdir, str(date))
-    (df_sp
-     .write
-     .format("orc")
-     .mode("overwrite")
-     .option("compression", "snappy")
-     .save(file_path)
+    file_path = sm_data_lake_dir + '/{}/{}'.format(subdir, str(date))
+    _ = (
+        df_sp
+        .write
+        .format("orc")
+        .mode("overwrite")
+        .option("compression", "snappy")
+        .save(file_path)
     )
     return True
 
-def pipeline(data_dir):
+def pipeline(collect_threshold=.85):
+    print('start session\n\n\n')
     ## start spark session
     spark = (
         SparkSession
@@ -133,36 +139,77 @@ def pipeline(data_dir):
 
 
     ##### Get tickers to collect
-    ## this can point to local directory and query via spark
-    sql_ = """
-    SELECT DISTINCT ticker
-    FROM stock_market.historical_price
+    ticker_file = sm_data_lake_dir + '/seed-data/nasdaq_screener_1628807233734.csv'
+    ticker_df = pd.read_csv(ticker_file)
+    all_ticker_list = ticker_df['Symbol'].tolist()
+    collected_list = []
+    ticker_list = (
+        list( 
+            set(all_ticker_list) 
+            - 
+            set(collected_list)
+        )
+    )
+    collect_percent = len(collected_list)/len(all_ticker_list) 
+    collected_analyst_estimate_df = pd.DataFrame()
+    
+    count = 0
+    while collect_percent < collect_threshold:
+        _str = """
+        COLLECTING PRICE DATA - LOOP {}
+        \tTickers Left to Collect: {}
+        \tTickers collected: {}
+        \tPercent collected: {}
+        """
+        print(_str.format(count, len(ticker_list), len(collected_list), collect_percent, collect_threshold, collect_percent > collect_threshold))
+        ## make requests
+        analyst_estimate_df_list = (
+            sc
+            .parallelize(ticker_list)
+            .map(get_marketwatch)
+            .collect()
+        )
+        ## uppack and append
+        analyst_estimate_df = prep_marketwatch(analyst_estimate_df_list)
+        collected_analyst_estimate_df = (
+            collected_analyst_estimate_df
+            .append(analyst_estimate_df)
+            .reset_index(drop=True)
+        )
+        ## calculate percent collected
+        _ = collected_list.extend(analyst_estimate_df['ticker'].to_list())        
+        ticker_list = (
+            list( 
+                set(all_ticker_list) 
+                - 
+                set(collected_list)
+            )
+        )
+        collect_percent = len(collected_list)/len(all_ticker_list) 
+        collect_percent_og = collect_percent
+        if collect_percent >= collect_threshold:
+            continue ## no need to sleep
+        time.sleep(25)
+        ## iterat the counter and exit if too many
+        count += 1
+        if count > 5:
+            collect_percent = 1
+    ## Exite the loop and write
+    _str = """
+    FINAL COLLECTION STATS – {} Loops
+    \tTickers collected: {}
+    \tPercent collected: {}
     """
-    ticker_df = pd.read_sql_query(sql_, open_connection())
-    ticker_df = (
-        ticker_df
-        .loc[ticker_df['ticker'].apply(lambda r: '.' not in r)]
-    )
-    ticker_list = ticker_df['ticker'].tolist()
+    print(_str.format(count-1, len(collected_list), collect_percent_og))
 
-    ## make requests
-    analyst_estimate_df_list = (
-        sc
-        .parallelize(ticker_list)
-        .map(get_marketwatch)
-        .collect()
-    )
-
-    ## unpack the data
-    analyst_estimate_df = prep_marketwatch(analyst_estimate_df_list)
-
+    print('write it down!\n\n\n')
     ## write data
     subdir = 'analyst-opinion/marketwatch'
     d = str(analyst_estimate_df.loc[0, 'collection_date'].date())
-    write_spark(spark, analyst_estimate_df, data_dir, subdir, d)
+    _ = write_spark(spark, collected_analyst_estimate_df, subdir, d)
 
     ## done
     return True
 
 if __name__ == "__main__":
-    pipeline(data_dir='/Users/alexanderhubbard/stock-market/data')
+    _ = pipeline()
