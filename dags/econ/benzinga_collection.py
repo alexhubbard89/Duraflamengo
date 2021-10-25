@@ -17,30 +17,21 @@ from pyspark import SparkContext, SparkConf
 
 ## Local code
 from common.scripts.spoof import Ip_Spoofer
+import common.scripts.utils as utils
 
 ## get global vars
 from airflow.models import Variable
 sm_data_lake_dir = Variable.get("sm_data_lake_dir")
-BUFFER_DIR = sm_data_lake_dir+'/buffer/target-price-benzinga/'
-DL_DIR = sm_data_lake_dir+'/target-price-benzinga/{date}/'
+BUFFER_TARGET_DIR = sm_data_lake_dir+'/buffer/target-price-benzinga/'
+DL_TARGET_DIR = sm_data_lake_dir+'/target-price-benzinga/{date}/'
+UO_BENGINZA_URL = """https://api.benzinga.com/api/v1/signal/option_activity
+?token={BENGINZA_TOKEN}
+&parameters[date_from]={START}
+&parameters[date_to]={END}
+&pagesize=1000"""
+UNUSUAL_OPTIONS_BUFFER = sm_data_lake_dir+'/buffer/unusual-options-benzinga/'
 
-def write_spark(spark, df, date):
-    try:
-        df_sp = spark.createDataFrame(df)
-    except:
-        print('except')
-        df_sp = df ## already in spark
-    file_path = DL_DIR.format(date=str(date))
-    _ = (
-        df_sp
-        .write
-        .format("orc")
-        .mode("overwrite")
-        .option("compression", "snappy")
-        .save(file_path)
-    )
-    return True
-
+## functions
 def clean(text):
     return (
         text
@@ -99,7 +90,7 @@ def benzinga_target_price(ticker, print_url=False):
         df['pt'] = df['pt'].apply(lambda row: np.nan if row == '' else float(row))
         df['ticker'] = ticker
         df['date_collected'] = datetime.now().date()
-        df.to_csv(BUFFER_DIR+ticker+'.csv', index=False)
+        df.to_csv(BUFFER_TARGET_DIR+ticker+'.csv', index=False)
         return True
     except:
         return False ## no data
@@ -125,7 +116,7 @@ def price_target_collection(collect_threshold=.50):
     ticker_file = sm_data_lake_dir + '/seed-data/nasdaq_screener_1628807233734.csv'
     ticker_df = pd.read_csv(ticker_file)
     all_ticker_list = ticker_df['Symbol'].tolist()
-    collected_list = glob.glob(BUFFER_DIR+'*')
+    collected_list = [x.split('/')[-1].split('.csv')[0] for x in glob.glob(BUFFER_TARGET_DIR+'*')]
     ticker_list = (
         list( 
             set(all_ticker_list) 
@@ -156,7 +147,7 @@ def price_target_collection(collect_threshold=.50):
         )
 
         ## calculate percent collected
-        collected_list = glob.glob(BUFFER_DIR+'*')
+        collected_list = [x.split('/')[-1].split('.csv')[0] for x in glob.glob(BUFFER_TARGET_DIR+'*')]
         ticker_list = (
             list( 
                 set(all_ticker_list) 
@@ -183,19 +174,19 @@ def price_target_collection(collect_threshold=.50):
     print(_str.format(count-1, len(collected_list), collect_percent))    
     return True
     
-def migrate_buffer():
+def migrate_target_buffer():
     ## start spark session
     spark = (
         SparkSession
         .builder 
-        .appName('benzing-migrate') 
+        .appName('benzing-migrate-ratings') 
         .getOrCreate()
     )
     ## get everything in buffer
     collected_df = (
         spark.read.format('csv')
         .options(header='true')
-        .load(BUFFER_DIR+'*')
+        .load(BUFFER_TARGET_DIR+'*')
         .toPandas()
     )
     ## format
@@ -210,7 +201,7 @@ def migrate_buffer():
     dl_df = (
         spark.read.format('orc')
         .options(header='true')
-        .load(DL_DIR.format(date='*'))
+        .load(DL_TARGET_DIR.format(date='*'))
         .toPandas()
     )
     ## format
@@ -264,11 +255,97 @@ def migrate_buffer():
         tmp_df['pt'] = tmp_df['pt'].astype(float)
         for c in ['research_firm', 'action', 'current', 'ticker']:
             tmp_df[c] = tmp_df[c].astype(str)
-        _ = write_spark(spark, tmp_df, date)
+        _ = utils.write_spark(spark, tmp_df, 'target-price-benzinga',date)
     return True 
 
-def clear_buffer():
-    print('clear buffer')
-    shutil.rmtree(BUFFER_DIR)
-    os.mkdir(BUFFER_DIR)
+def get_unusual_options(date):
+    """
+    Use benzinga's API to get unusual options data
+    Arg
+        date: Collection date.
+    Return
+        df: Dataframe
+    """
+    ## convert datetime string and localize
+    dt = (
+        pd.to_datetime(date)
+        .tz_convert('America/New_York')
+    )
+    start = dt.date()
+    ## prevent running during odd hours
+    collect = True
+    if dt.day_of_week > 4:
+        collect = False ## do not collect weekend
+    if dt.hour < 9:
+        collect = False ## do not collect too early
+    if dt.hour > 18:
+        collect = False ## do not collect too late
+    ## write empty file
+    if collect == False:
+        _ = (
+            pd.DataFrame()
+            .to_csv(UNUSUAL_OPTIONS_BUFFER+'{}.csv'.format(start), index=False)
+        )
+    ## format url
+    end = start + timedelta(days=1)
+    url = (
+        UO_BENGINZA_URL
+        .format(BENGINZA_TOKEN=Variable.get('BENGINZA_TOKEN'),
+                START=start, END=end)
+        .replace('\n', '')
+    )
+    ## make request
+    spoof = Ip_Spoofer()
+    page = Ip_Spoofer.request_page(spoof, url)
+    ## unpack data
+    items_list = page.findAll('item')
+    result_list = []
+    for item in items_list:
+        item_content = item.contents[1::2]
+        data = dict()
+        _ = [data.update({x.name: x.text}) for x in item_content]
+        _ = result_list.append(data)
+    ## save to buffer for spark to migrate
+    _ = (
+        pd.DataFrame(result_list)
+        .to_csv(UNUSUAL_OPTIONS_BUFFER+'{}.csv'.format(start), index=False)
+    )
+    return True
+
+def migrate_options_buffer():
+    ## get date from buffer file
+    date = (
+        glob
+        .glob(UNUSUAL_OPTIONS_BUFFER+'*')[0]
+        .split('/')[-1]
+        .split('.csv')[0]
+    )
+    ## get data
+    file = glob.glob(UNUSUAL_OPTIONS_BUFFER+'*')[0]
+    try:
+        collected_df = pd.read_csv(file)
+    except ValueError as e: 
+        if e == 'No columns to parse from file':
+            return False
+        else:
+            return e
+    if len(collected_df) == 0:
+        return False
+    ## little formatting
+    date_cols = ['date_expiration', 'date']
+    for col in date_cols:
+        collected_df[col] = (
+            pd.to_datetime(collected_df[col])
+            .apply(lambda r: r.date())
+        )
+
+    ## start spark session
+    spark = (
+        SparkSession
+        .builder 
+        .appName('benzing-migrate-unusual-options') 
+        .getOrCreate()
+    )    
+    ## write to data lake
+    _ = utils.write_spark(spark, collected_df, 'unusual-options-benzinga', date)
     return True
