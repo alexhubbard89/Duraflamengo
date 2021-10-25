@@ -277,7 +277,7 @@ def distributed_collection(collect_threshold: float,
             continue ## no need to sleep
         ## iterat the counter and exit if too many
         count += 1
-        if count > 25:
+        if count > 50:
             collect_percent = 1
         time.sleep(60) ## try to prevent black listing
     ## Exite the loop and write

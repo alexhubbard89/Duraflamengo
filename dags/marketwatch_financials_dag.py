@@ -9,10 +9,6 @@ from airflow.operators.python import PythonOperator
 from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
 from airflow.models import Variable
 
-## python scripts
-import common.scripts.utils as utils
-import econ.benzinga_collection as bc
-
 ## get global vars
 pyspark_app_home = Variable.get("PYSPARK_APP_HOME")
 sm_data_lake_dir = Variable.get("sm_data_lake_dir")
@@ -44,7 +40,7 @@ collect_balance_sheet = SparkSubmitOperator(
     executor_memory='15g',
     driver_memory='15g',
     name='collect_balance_sheet',
-    execution_timeout=timedelta(minutes=30),
+    execution_timeout=timedelta(minutes=90),
     conf={'master':'spark://localhost:7077'},
     dag=dag,
 )
@@ -66,7 +62,7 @@ collect_cash_flow = SparkSubmitOperator(
     executor_memory='15g',
     driver_memory='15g',
     name='collect_cash_flow',
-    execution_timeout=timedelta(minutes=30),
+    execution_timeout=timedelta(minutes=90),
     conf={'master':'spark://localhost:7077'},
     dag=dag,
 )
@@ -88,7 +84,7 @@ collect_income = SparkSubmitOperator(
     executor_memory='15g',
     driver_memory='15g',
     name='collect_income',
-    execution_timeout=timedelta(minutes=30),
+    execution_timeout=timedelta(minutes=90),
     conf={'master':'spark://localhost:7077'},
     dag=dag,
 )
