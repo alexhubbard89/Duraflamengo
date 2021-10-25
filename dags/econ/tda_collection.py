@@ -275,7 +275,7 @@ def daily_price_pipeline(collect_threshold=.85, loop_collect=240):
     ticker_file = sm_data_lake_dir + '/seed-data/nasdaq_screener_1628807233734.csv'
     ticker_df = pd.read_csv(ticker_file)
     all_ticker_list = ticker_df['Symbol'].tolist()
-    collected_list = glob.glob(DAILY_WRITE_BUFFER+'*')
+    collected_list = [x.split('/')[-1].split('.csv')[0] for x in glob.glob(DAILY_WRITE_BUFFER+'*')]
     tickers_left = (
         list( 
             set(all_ticker_list) 
@@ -314,7 +314,7 @@ def daily_price_pipeline(collect_threshold=.85, loop_collect=240):
         )
 
         ## calculate percent collected
-        collected_list = glob.glob(DAILY_WRITE_BUFFER+'*')
+        collected_list = [x.split('/')[-1].split('.csv')[0] for x in glob.glob(DAILY_WRITE_BUFFER+'*')]
         tickers_left = (
             list( 
                 set(all_ticker_list) 

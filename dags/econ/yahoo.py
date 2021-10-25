@@ -23,11 +23,6 @@ TRENDING_WRITE_BUFFER = sm_data_lake_dir+'/buffer/yahoo-trending/'
 DL_WRITE_DIR = sm_data_lake_dir+'/{subdir}/{date}/'
 
 ## functions
-def is_between(time, time_range):
-    if time_range[1] < time_range[0]:
-        return time >= time_range[0] or time <= time_range[1]
-    return time_range[0] <= time <= time_range[1]
-
 def get_trending_collected():
     return [
         x
@@ -39,7 +34,7 @@ def get_trending_collected():
 def get_yahoo_trending():
     now = datetime.now(pytz.timezone('America/New_York'))
     now_time = str(now.time()).split('.')[0]
-    if is_between(now_time, ("09:30", "16:30")) == False:
+    if utils.is_between(now_time, ("09:30", "16:30")) == False:
         print('\n\n\nDO NOT COLLECT\n\n\n')
         ## DO NOT COLLECT
         ## Bc its currently outside of market hours
@@ -77,7 +72,7 @@ def get_yahoo_trending():
 def migrate_trending():
     now = datetime.now(pytz.timezone('America/New_York'))
     now_time = str(now.time()).split('.')[0]
-    if is_between(now_time, ("09:30", "16:30")) == False:
+    if utils.is_between(now_time, ("09:30", "16:30")) == False:
         print('\n\n\nDO NOT MIGRATE\n\n\n')
         ## DO NOT MIGRATE
         ## Bc its currently outside of market hours
@@ -119,7 +114,7 @@ def clear_yahoo_trending_buffer():
     """
     now = datetime.now(pytz.timezone('America/New_York'))
     now_time = str(now.time()).split('.')[0]
-    if is_between(now_time, ("09:30", "16:30")) == True:
+    if utils.is_between(now_time, ("09:30", "16:30")) == True:
         print('\n\n\nDO NOT CLEAR BUFFER\n\n\n')
         ## DO NOT CLEAR BUFFER
         ## Bc its currently market hours

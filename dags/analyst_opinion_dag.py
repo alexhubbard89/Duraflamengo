@@ -1,11 +1,3 @@
-"""
-TO DOs:
-- Add arguments for sm data lake directory
-- Fire off every 2 hours
-- Deduplicate data
-- Find tickers that were unsuccessfully collected and retry
-"""
-
 ## python
 import os
 from datetime import datetime, timedelta
@@ -19,6 +11,7 @@ from airflow.models import Variable
 
 ## python scripts
 import common.scripts.utils as utils
+import econ.benzinga_collection as bc
 
 ## get global vars
 pyspark_app_home = Variable.get("PYSPARK_APP_HOME")
@@ -47,6 +40,7 @@ dag = DAG(dag_id='analyst-estimates',
           # max_active_runs=2,
           )
 
+## market watch ratings
 market_watch_collection = SparkSubmitOperator(
     task_id='market_watch_collection',
     application=f'{pyspark_app_home}/dags/econ/analyst_opinion.py',
@@ -58,6 +52,7 @@ market_watch_collection = SparkSubmitOperator(
     dag=dag,
 )
 
+## benzinga target price
 benzinga_collection = SparkSubmitOperator(
     task_id='benzinga_collection',
     application=f'{pyspark_app_home}/dags/econ/runner/collect_benzinga.py',
@@ -68,20 +63,18 @@ benzinga_collection = SparkSubmitOperator(
     conf={'master':'spark://localhost:7077'},
     dag=dag,
 )
-
-benzinga_migration = SparkSubmitOperator(
-    task_id='benzinga_migration',
-    application=f'{pyspark_app_home}/dags/econ/runner/migrate_benzinga.py',
+benzinga_target_migration = SparkSubmitOperator(
+    task_id='benzinga_target_migration',
+    application=f'{pyspark_app_home}/dags/econ/runner/migrate_benzinga_target.py',
     executor_memory='15g',
     driver_memory='15g',
-    name='benzinga_migration',
+    name='benzinga_target_migration',
     execution_timeout=timedelta(minutes=30),
     conf={'master':'spark://localhost:7077'},
     dag=dag,
 )
-
-benzinga_clear_buffer = PythonOperator(
-    task_id='benzinga_clear_buffer' ,
+benzinga_clear_target_buffer = PythonOperator(
+    task_id='benzinga_clear_target_buffer' ,
     python_callable=utils.clear_buffer,
     op_kwargs={'subdir': 'target-price-benzinga'},
     dag=dag,
@@ -89,5 +82,9 @@ benzinga_clear_buffer = PythonOperator(
 
 [
     market_watch_collection, 
-    [benzinga_collection >> benzinga_migration >> benzinga_clear_buffer]
+    [
+        benzinga_collection >> 
+        benzinga_target_migration >> 
+        benzinga_clear_target_buffer
+    ]
 ]
