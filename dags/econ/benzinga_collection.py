@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+import datetime as dt
 import string
 import pytz
 import requests
@@ -8,6 +8,7 @@ import time
 import glob
 import shutil
 import os
+import bs4
 
 ## spark
 from pyspark.sql import SparkSession
@@ -21,15 +22,29 @@ import common.scripts.utils as utils
 
 ## get global vars
 from airflow.models import Variable
+
+## data locations
 sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 BUFFER_TARGET_DIR = sm_data_lake_dir+'/buffer/target-price-benzinga/'
 DL_TARGET_DIR = sm_data_lake_dir+'/target-price-benzinga/{date}/'
-UO_BENGINZA_URL = """https://api.benzinga.com/api/v1/signal/option_activity
-?token={BENGINZA_TOKEN}
-&parameters[date_from]={START}
-&parameters[date_to]={END}
-&pagesize=1000"""
 UNUSUAL_OPTIONS_BUFFER = sm_data_lake_dir+'/buffer/unusual-options-benzinga/'
+RATING_CHANGES_BUFFER = sm_data_lake_dir+'/buffer/benzinga-rating-changes/'
+DL_UO_DIR = 'benzinga-unusual-options'
+DL_RATING_CHANGES_DIR = 'benzinga-rating-changes'
+
+## urls
+UO_URL = """https://api.benzinga.com/api/v1/signal/option_activity
+?token={BENGINZA_TOKEN}
+&parameters[date_from]={DATE}
+&parameters[date_to]={DATE}
+&pagesize=1000"""
+RATING_CHANGES_URL = """https://api.benzinga.com/api/v2.1/calendar/ratings
+?token={BENGINZA_TOKEN}
+&parameters[date_from]={DATE}
+&parameters[date_to]={DATE}
+&pagesize=1000
+"""
+
 
 ## functions
 def clean(text):
@@ -89,7 +104,7 @@ def benzinga_target_price(ticker, print_url=False):
         df['analyst_rating_date'] = pd.to_datetime(df['analyst_rating_date'])
         df['pt'] = df['pt'].apply(lambda row: np.nan if row == '' else float(row))
         df['ticker'] = ticker
-        df['date_collected'] = datetime.now().date()
+        df['date_collected'] = dt.datetime.now().date()
         df.to_csv(BUFFER_TARGET_DIR+ticker+'.csv', index=False)
         return True
     except:
@@ -255,8 +270,26 @@ def migrate_target_buffer():
         tmp_df['pt'] = tmp_df['pt'].astype(float)
         for c in ['research_firm', 'action', 'current', 'ticker']:
             tmp_df[c] = tmp_df[c].astype(str)
-        _ = utils.write_spark(spark, tmp_df, 'target-price-benzinga',date)
+        _ = utils.write_spark(spark, tmp_df, 'target-price-benzinga', date)
     return True 
+
+def unpack(page: bs4.BeautifulSoup) -> list:
+    """
+    Locate data from Benzinga page and extract
+    data from the data table.
+    
+    Input: Benzinga Page
+    Return: List of dictionaries, ready to be DF.
+    """
+    ## unpack data
+    items_list = page.findAll('item')
+    result_list = []
+    for item in items_list:
+        item_content = item.contents[1::2]
+        data = dict()
+        _ = [data.update({x.name: x.text}) for x in item_content]
+        _ = result_list.append(data)
+    return result_list
 
 def get_unusual_options(date):
     """
@@ -266,69 +299,37 @@ def get_unusual_options(date):
     Return
         df: Dataframe
     """
-    ## convert datetime string and localize
-    dt = (
-        pd.to_datetime(date)
-        .tz_convert('America/New_York')
-    )
-    start = dt.date()
-    ## prevent running during odd hours
-    collect = True
-    if dt.day_of_week > 4:
-        collect = False ## do not collect weekend
-    if dt.hour < 9:
-        collect = False ## do not collect too early
-    if dt.hour > 18:
-        collect = False ## do not collect too late
-    ## write empty file
-    if collect == False:
-        _ = (
-            pd.DataFrame()
-            .to_csv(UNUSUAL_OPTIONS_BUFFER+'{}.csv'.format(start), index=False)
-        )
     ## format url
-    end = start + timedelta(days=1)
     url = (
-        UO_BENGINZA_URL
-        .format(BENGINZA_TOKEN=Variable.get('BENGINZA_TOKEN'),
-                START=start, END=end)
+        UO_URL
+        .format(
+            BENGINZA_TOKEN=Variable.get('BENGINZA_TOKEN'),
+            DATE=date)
         .replace('\n', '')
     )
     ## make request
     spoof = Ip_Spoofer()
     page = Ip_Spoofer.request_page(spoof, url)
     ## unpack data
-    items_list = page.findAll('item')
-    result_list = []
-    for item in items_list:
-        item_content = item.contents[1::2]
-        data = dict()
-        _ = [data.update({x.name: x.text}) for x in item_content]
-        _ = result_list.append(data)
+    result_list = unpack(page)
+    if len(result_list) == 0:
+        return False
     ## save to buffer for spark to migrate
     _ = (
         pd.DataFrame(result_list)
-        .to_csv(UNUSUAL_OPTIONS_BUFFER+'{}.csv'.format(start), index=False)
+        .to_csv(UNUSUAL_OPTIONS_BUFFER+'{}.csv'.format(date), index=False)
     )
     return True
 
 def migrate_options_buffer():
-    ## get date from buffer file
-    date = (
-        glob
-        .glob(UNUSUAL_OPTIONS_BUFFER+'*')[0]
-        .split('/')[-1]
-        .split('.csv')[0]
-    )
     ## get data
-    file = glob.glob(UNUSUAL_OPTIONS_BUFFER+'*')[0]
-    try:
-        collected_df = pd.read_csv(file)
-    except ValueError as e: 
-        if e == 'No columns to parse from file':
-            return False
-        else:
-            return e
+    file_list = glob.glob(UNUSUAL_OPTIONS_BUFFER+'*')
+    if len(file_list) == 0:
+        return False
+    collected_df = (
+        pd.concat([pd.read_csv(x) for x in file_list])
+        .reset_index(drop=True)
+    )
     if len(collected_df) == 0:
         return False
     ## little formatting
@@ -338,7 +339,6 @@ def migrate_options_buffer():
             pd.to_datetime(collected_df[col])
             .apply(lambda r: r.date())
         )
-
     ## start spark session
     spark = (
         SparkSession
@@ -347,5 +347,120 @@ def migrate_options_buffer():
         .getOrCreate()
     )    
     ## write to data lake
-    _ = utils.write_spark(spark, collected_df, 'unusual-options-benzinga', date)
+    ## get date from buffer file
+    date = (
+        glob
+        .glob(UNUSUAL_OPTIONS_BUFFER+'*')[0]
+        .split('/')[-1]
+        .split('.csv')[0]
+    )
+    _ = utils.write_spark(spark, collected_df, DL_UO_DIR, date)
+    return True
+
+def get_rating_changes(date: dt.datetime) -> bool:
+    """
+    Use Benzinga's hidden API to get the Analyst 
+    Rating Changes from. Write data to buffer 
+    and return status.
+    
+    Input: Date.
+    Return: Collection status.
+    """
+    ## make url
+    date_str = str(date)[:10]
+    url = (
+        RATING_CHANGES_URL
+        .format(
+            BENGINZA_TOKEN=Variable.get('BENGINZA_TOKEN'),
+            DATE=date_str
+        )
+        .replace('\n', '')
+    )
+    ## make request
+    spoof = Ip_Spoofer()
+    page = Ip_Spoofer.request_page(spoof, url)
+    ## unpack data
+    result_list = unpack(page)
+    if len(result_list) == 0:
+        return False
+    ## save to buffer for spark to migrate
+    file_name = date_str + '.csv'
+    _ = (
+        pd.DataFrame(result_list)
+        .to_csv(RATING_CHANGES_BUFFER+file_name, index=False)
+    )
+    return True
+
+def migrate_rating_changes() -> bool:
+    """
+    Migrat all data that has been collected for a given
+    date. 
+    
+    Input: None
+    Return: Migration status.
+    """
+    TYPE_DICT = {
+        'ticker': str,
+        'exchange': str,
+        'rating_prior': str,
+        'analyst_name': str,
+        'id': str,
+        'pt_prior': float,
+        'url': str,
+        'importance': float,
+        'time': str, 
+        'action_pt': str,
+        'action_company': str,
+        'pt_current': float,
+        'notes': str,
+        'analyst': str,
+        'name': str,
+        'rating_current': str,
+        'url_news': str,
+        'currency': str,
+        'updated': int,
+        'url_calendar': str
+    }
+    ## get data
+    file_list = glob.glob(RATING_CHANGES_BUFFER+'*')
+    if len(file_list) == 0:
+        return False
+    collected_df = (
+        pd.concat([pd.read_csv(x) for x in file_list])
+        .reset_index(drop=True)
+    )
+    if len(collected_df) == 0:
+        return False
+    ## formatting
+    collected_df['date'] = (
+        pd.to_datetime(collected_df['date'])
+        .apply(lambda r: r.date())
+    )
+    df_cols = collected_df.columns
+    for col in TYPE_DICT:
+        if col not in df_cols:
+            continue
+        collected_df[col] = collected_df[col].astype(TYPE_DICT[col])
+    ## start spark session
+    spark = (
+        SparkSession
+        .builder 
+        .appName(DL_RATING_CHANGES_DIR) 
+        .getOrCreate()
+    )    
+    ## write to data lake
+    ## get date from buffer file
+    date = (
+        glob
+        .glob(RATING_CHANGES_BUFFER+'*')[0]
+        .split('/')[-1]
+        .split('.csv')[0]
+    )
+    _ = (
+        utils
+        .write_spark(spark, 
+                    collected_df, 
+                    DL_RATING_CHANGES_DIR, 
+                     date)
+    )
     return True

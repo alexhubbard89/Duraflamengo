@@ -15,7 +15,11 @@ def clear_buffer(subdir):
     return True
 
 def write_spark(spark, df, subdir, date):
-    file_path = DL_WRITE_DIR.format(subdir=subdir, date=str(date))
+    if date != None:
+        file_path = DL_WRITE_DIR.format(subdir=subdir, date=str(date))
+    else:
+        SHORT_DIR = '/'.join(DL_WRITE_DIR.split('/')[:-2]) + '/'
+        file_path = SHORT_DIR.format(subdir=subdir)
     if isinstance(df, DataFrame) == False:
         df_sp = spark.createDataFrame(df)
     else:

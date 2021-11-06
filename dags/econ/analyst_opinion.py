@@ -177,7 +177,14 @@ def pipeline(collect_threshold=.85):
             .reset_index(drop=True)
         )
         ## calculate percent collected
-        _ = collected_list.extend(analyst_estimate_df['ticker'].to_list())        
+        _ = (
+            collected_list
+            .extend(
+                analyst_estimate_df['ticker']
+                .drop_duplicates()
+                .to_list()
+            )
+        )
         ticker_list = (
             list( 
                 set(all_ticker_list) 
