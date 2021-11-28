@@ -31,7 +31,7 @@ default_args = {
 dag = DAG(dag_id='tda-daily-price-collection',
           default_args=default_args,
           catchup=False,
-          schedule_interval="0 6 * * 2-6") ## weekdays at 6am
+          schedule_interval="0 2 * * 2-6") ## weekdays at 2am
 
 tda_daily_price_collection= SparkSubmitOperator(
     task_id='tda_daily_price_collection',

@@ -173,7 +173,17 @@ def migrate_financials(ticker: str, fin_type: str) -> bool:
     """
     buffer_df = pd.read_csv(BUFFER.format(fin_type, ticker))
     dl_df = pd.read_csv(WRITE_PATH.format(fin_type, ticker))
-    
+    ## format date for sort
+    date_cols = ['collection_date', 'date']
+    for col in date_cols:
+        buffer_df[col] = (
+            pd.to_datetime(buffer_df[col])
+            .apply(lambda r: r.date())
+        )
+        dl_df[col] = (
+            pd.to_datetime(dl_df[col])
+            .apply(lambda r: r.date())
+        )
     ## full dataset
     full_df = (
         dl_df

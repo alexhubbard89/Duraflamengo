@@ -282,13 +282,16 @@ def unpack(page: bs4.BeautifulSoup) -> list:
     Return: List of dictionaries, ready to be DF.
     """
     ## unpack data
-    items_list = page.findAll('item')
-    result_list = []
-    for item in items_list:
-        item_content = item.contents[1::2]
-        data = dict()
-        _ = [data.update({x.name: x.text}) for x in item_content]
-        _ = result_list.append(data)
+    try:
+        items_list = page.findAll('item')
+        result_list = []
+        for item in items_list:
+            item_content = item.contents[1::2]
+            data = dict()
+            _ = [data.update({x.name: x.text}) for x in item_content]
+            _ = result_list.append(data)
+    except:
+        result_list = []
     return result_list
 
 def get_unusual_options(date):
@@ -322,6 +325,39 @@ def get_unusual_options(date):
     return True
 
 def migrate_options_buffer():
+    """
+    Migrat all data that has been collected for a given
+    date. 
+    
+    Input: None
+    Return: Migration status.
+    """
+    TYPE_DICT = {
+    'description': str,
+    'option_symbol': str,
+    'trade_count': float,
+    'open_interest': float,
+    'id': str,
+    'time': str,
+    'sentiment': str,
+    'aggressor_ind': float,
+    'underlying_type': str,
+    'ask': float,
+    'midpoint': float,
+    'updated': float,
+    'ticker': str,
+    'description_extended': str,
+    'strike_price': float,
+    'option_activity_type': str,
+    'size': float,
+    'volume': float,
+    'bid': float,
+    'exchange': str,
+    'underlying_price': float,
+    'cost_basis': float,
+    'put_call': str,
+    'price': float
+    }
     ## get data
     file_list = glob.glob(UNUSUAL_OPTIONS_BUFFER+'*')
     if len(file_list) == 0:
@@ -332,20 +368,24 @@ def migrate_options_buffer():
     )
     if len(collected_df) == 0:
         return False
-    ## little formatting
-    date_cols = ['date_expiration', 'date']
-    for col in date_cols:
+    ## formatting
+    for col in ['date', 'date_expiration']:
         collected_df[col] = (
             pd.to_datetime(collected_df[col])
             .apply(lambda r: r.date())
         )
+    df_cols = collected_df.columns
+    for col in TYPE_DICT:
+        if col not in df_cols:
+            continue
+        collected_df[col] = collected_df[col].astype(TYPE_DICT[col])
     ## start spark session
     spark = (
         SparkSession
         .builder 
         .appName('benzing-migrate-unusual-options') 
         .getOrCreate()
-    )    
+    )
     ## write to data lake
     ## get date from buffer file
     date = (
@@ -418,7 +458,7 @@ def migrate_rating_changes() -> bool:
         'rating_current': str,
         'url_news': str,
         'currency': str,
-        'updated': int,
+        'updated': float,
         'url_calendar': str
     }
     ## get data
