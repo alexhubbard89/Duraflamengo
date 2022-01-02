@@ -7,7 +7,8 @@ import pyspark.sql.types as T
 import pyspark.sql.functions as F
 from pyspark import SparkContext, SparkConf
 
-sm_data_lake_dir = '/Users/alexanderhubbard/stock-market/data'
+from airflow.models import Variable
+sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 WRITE_PATH = sm_data_lake_dir + '/earnings-report-dates/data.csv'
 
 def get_earnings(ticker: str) -> pd.DataFrame:

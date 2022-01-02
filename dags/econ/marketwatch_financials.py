@@ -17,8 +17,10 @@ from pyspark import SparkContext, SparkConf
 
 ## Local code
 from common.scripts.spoof import Ip_Spoofer
+import common.scripts.utils as utils
 
-sm_data_lake_dir = '/Users/alexanderhubbard/stock-market/data'
+from airflow.models import Variable
+sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 BUFFER = sm_data_lake_dir+'/buffer/marketwatch-financials/{}/{}.csv'
 WRITE_PATH = sm_data_lake_dir + '/marketwatch-financials/{}/{}.csv'
 
@@ -48,22 +50,6 @@ def clean(text):
         .replace('__', '_')
         .replace('\n', '')
     )
-
-def flip_sign(text):
-    return '-'+text.strip('(').strip(')') if '(' in text else text
-
-def percent(text):
-    return float(text.strip('%'))/100 if '%' in text else text
-
-def int_extend(column):
-    int_text = ['K', 'M', 'B', 'T']
-    int_scale = [1000, 1000000, 1000000000, 1000000000]
-    for t, s in zip(int_text, int_scale):
-        column = column.apply(lambda row: flip_sign(str(row)))
-        column = column.apply(lambda row: int(float(str(row).replace(t, ''))*s) if t in str(row) else row)
-        column = column.apply(lambda row: percent(str(row)))
-        column = column.apply(lambda row: np.nan if row == '-' else row)
-    return column
 
 def clean_col(column):
     return (
@@ -124,7 +110,7 @@ def get_financials(ticker: str, fin_type: str , freq: str) -> bool:
 
         df = pd.DataFrame(data, columns=cols)
         for col in cols[1:]:
-            df[col] = int_extend(df[col])
+            df[col] = utils.int_extend(df[col])
 
         all_data = all_data.append(df).reset_index(drop=True)
 
@@ -201,7 +187,7 @@ def migrate_financials(ticker: str, fin_type: str) -> bool:
     _ = os.remove(BUFFER.format(fin_type, ticker))
     return True
 
-    ## Pipeline methods to distribute 
+## Pipeline methods to distribute 
 def distributed_collection(collect_threshold: float, 
                            fin_type: str, 
                            loop_collect: int) -> bool:
@@ -231,9 +217,8 @@ def distributed_collection(collect_threshold: float,
     TMP_BUFFER = BUFFER.format(fin_type, 'split').split('split')[0]
 
     ##### Get tickers to collect
-    ticker_file = sm_data_lake_dir + '/seed-data/nasdaq_screener_1628807233734.csv'
-    ticker_df = pd.read_csv(ticker_file)
-    all_ticker_list = ticker_df['Symbol'].tolist()
+    ue_df = pd.read_csv(BUFFER+'/to-collect/data.csv')
+    all_ticker_list = ue_df['ticker'].tolist()
     collected_list = [x.split('/')[-1].split('.csv')[0] for x in glob.glob(TMP_BUFFER+'*')]
     tickers_left = (
         list( 

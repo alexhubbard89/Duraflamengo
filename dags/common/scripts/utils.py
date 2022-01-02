@@ -11,6 +11,22 @@ BUFFER_DIR = sm_data_lake_dir+'/buffer/{}/'
 DL_WRITE_DIR = sm_data_lake_dir+'/{subdir}/{date}/'
 
 ## functions
+def flip_sign(text):
+    return '-'+text.strip('(').strip(')') if '(' in text else text
+
+def percent(text):
+    return float(text.strip('%'))/100 if '%' in text else text
+
+def int_extend(column):
+    int_text = ['K', 'M', 'B', 'T']
+    int_scale = [1000, 1000000, 1000000000, 1000000000]
+    for t, s in zip(int_text, int_scale):
+        column = column.apply(lambda row: flip_sign(str(row)))
+        column = column.apply(lambda row: int(float(str(row).replace(t, ''))*s) if t in str(row) else row)
+        column = column.apply(lambda row: percent(str(row)))
+        column = column.apply(lambda row: np.nan if row == '-' else row)
+    return column
+
 def clear_buffer(subdir):
     try:
         print('clear buffer')
@@ -47,13 +63,19 @@ def is_between(time, time_range):
         return time >= time_range[0] or time <= time_range[1]
     return time_range[0] <= time <= time_range[1]
 
+def read_protect(path):
+    try:
+        return pd.read_csv(path)
+    except:
+        return pd.DataFrame()
+
 def read_many_csv(dir: str) -> pd.DataFrame:
     """
     Read partitioned data in CSV format.
     """
     file_list = glob.glob(dir+'*.csv')
     df = (
-        pd.concat([pd.read_csv(x) for x in file_list])
+        pd.concat([read_protect(x) for x in file_list])
         .reset_index(drop=True)
     )
     return df

@@ -35,7 +35,7 @@ def make_minute_buffer():
     os.mkdir(MINUTE_WRITE_BUFFER+'collected/')
     ## leave extra space to ensure all dirs are ready
     end_date = datetime.now(pytz.timezone('America/New_York')).date() 
-    start_date = end_date - timedelta(days=15)
+    start_date = end_date - timedelta(days=30)
     for d in pd.date_range(start_date, end_date):
         date = str(d.date())
         os.mkdir(MINUTE_WRITE_BUFFER+date)
@@ -69,7 +69,7 @@ def get_historical_minute_price(ticker):
 
         td_historical['ticker'] = ticker
         
-       ## write out individual dates
+        ## write out individual dates
         for d in td_historical['date'].unique().tolist():
             date = str(d)
             df_write = (
@@ -288,6 +288,7 @@ def daily_price_pipeline(collect_threshold=.85, loop_collect=240):
     else:
         ticker_list = list(np.random.choice(tickers_left, loop_collect, replace=False))
     collect_percent = len(collected_list)/len(all_ticker_list) 
+    collect_percent_og = collect_percent
     
     count = 0
     while collect_percent < collect_threshold:

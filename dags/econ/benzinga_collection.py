@@ -294,7 +294,7 @@ def unpack(page: bs4.BeautifulSoup) -> list:
         result_list = []
     return result_list
 
-def get_unusual_options(date):
+def get_unusual_options(date: dt.date):
     """
     Use benzinga's API to get unusual options data
     Arg
