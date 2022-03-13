@@ -18,19 +18,13 @@ import common.scripts.utils as utils
 ## locations
 from airflow.models import Variable
 sm_data_lake_dir = Variable.get("sm_data_lake_dir")
-PRICE_DIR_HIST = sm_data_lake_dir+'/tda-daily-price-historical'
-PRICE_DIR = sm_data_lake_dir+'/tda-daily-price'
+PRICE_DIR = sm_data_lake_dir+'/tda-daily-price/date'
 STOCK_AVG_BUFFER = sm_data_lake_dir+'/buffer/der-m-avg-price'
 
 def prepare_pv() -> bool:
     """
     Use spark to read and filter needed data.
     Write to buffer.
-    
-    The averaging window for prices is 10 days.
-    This can shrink the data dramatically.
-    BC trading days vs real days, use larger
-    winder for filter and 10 day for agg layer.
     
     Since the data lake is so large I'm hitting 
     memory issues. This process finds the dates
@@ -79,14 +73,12 @@ def prepare_pv() -> bool:
     _ = spark.stop()
     return True
 
-def make_pv(window: int) -> bool:
+def make_pv() -> bool:
     """
     Make and write dialy price and volume
     averages to the data lake.
-    Lookback must be smaller than the days
-    filter in the prepare funciton.
-    
-    Input: Lookback window size. 
+    Lookback window is hardcoded to reflect
+    typical averaging.
     
     """
     ## load data
@@ -98,46 +90,100 @@ def make_pv(window: int) -> bool:
     ## fill missing close prices
     price_df['close'] = price_df['close'].fillna(method='ffill')
     ## make avg price
-    price_avg = (
+    price_avg_5 = (
         price_df
         .groupby('ticker')
         ['close']
-        .rolling(window)
+        .rolling(5)
         .mean()
         .reset_index()
-        .rename(columns={'level_1': 'index', 'close': 'avg_price'})
+        .rename(columns={'level_1': 'index', 'close': 'avg_price_5'})
+        .set_index('index')
+        .drop('ticker', 1)
+    )
+    price_avg_10 = (
+        price_df
+        .groupby('ticker')
+        ['close']
+        .rolling(10)
+        .mean()
+        .reset_index()
+        .rename(columns={'level_1': 'index', 'close': 'avg_price_10'})
+        .set_index('index')
+        .drop('ticker', 1)
+    )
+    price_avg_50 = (
+        price_df
+        .groupby('ticker')
+        ['close']
+        .rolling(50)
+        .mean()
+        .reset_index()
+        .rename(columns={'level_1': 'index', 'close': 'avg_price_50'})
+        .set_index('index')
+        .drop('ticker', 1)
+    )
+    price_avg_200 = (
+        price_df
+        .groupby('ticker')
+        ['close']
+        .rolling(200, min_periods=1)
+        .mean()
+        .reset_index()
+        .rename(columns={'level_1': 'index', 'close': 'avg_price_200'})
         .set_index('index')
         .drop('ticker', 1)
     )
     ## make avg vol
-    volume_avg = (
+    volume_avg_5 = (
         price_df
         .groupby('ticker')
         ['volume']
-        .rolling(window)
+        .rolling(5)
         .mean()
         .reset_index()
-        .rename(columns={'level_1': 'index', 'volume': 'avg_volume'})
+        .rename(columns={'level_1': 'index', 'volume': 'avg_volume_5'})
+        .set_index('index')
+        .drop('ticker', 1)
+    )
+    volume_avg_10 = (
+        price_df
+        .groupby('ticker')
+        ['volume']
+        .rolling(10)
+        .mean()
+        .reset_index()
+        .rename(columns={'level_1': 'index', 'volume': 'avg_volume_10'})
         .set_index('index')
         .drop('ticker', 1)
     )
     ## join and subset columns
     price_df_full = (
         price_df
-        .join(price_avg)
-        .join(volume_avg)
-        [['ticker', 'date', 'close', 'avg_price', 'avg_volume']]
+        .join(price_avg_5)
+        .join(price_avg_10)
+        .join(price_avg_50)
+        .join(price_avg_200)
+        .join(volume_avg_5)
+        .join(volume_avg_10)
+        [['ticker', 'date', 'close', 
+          'avg_price_5', 'avg_price_10', 'avg_price_50',
+          'avg_price_200', 'avg_volume_5', 'avg_volume_10']]
     )
     ## subset to analysis date
     # get date
     fn = (
         glob
         .glob(STOCK_AVG_BUFFER + '/prepared/*.csv')[0]
-        .split('/')[-1].split('.csv')[0]
+        .split('/')[-1]
         .split('T')[0]
+        .split('.csv')[0]
         .split('-')
     )
-    date = dt.date(int(fn[0]), int(fn[1]), int(fn[2]))
+    date = (
+        dt.date(int(fn[0]), int(fn[1]), int(fn[2]))
+        - dt.timedelta(1) ## bc collect yesterday prices
+        )
     # filter
     price_df_subset = (
         price_df_full
@@ -160,15 +206,14 @@ def migrate_pv():
     if len(file_list) == 0:
         return False
     price_df = utils.read_many_csv(STOCK_AVG_BUFFER + '/finished/')
-    ## get date
-    fn = (
-        glob
-        .glob(STOCK_AVG_BUFFER + '/finished/*.csv')[0]
-        .split('/')[-1].split('.csv')[0]
-        .split('T')[0]
-        .split('-')
+    date = (
+        pd.to_datetime(
+            glob.glob(STOCK_AVG_BUFFER + '/finished/*.csv')[0]
+            .split('/')[-1]
+            .split('T')[0]
+            .split('.csv')[0]
+        ).date()
     )
-    date = dt.date(int(fn[0]), int(fn[1]), int(fn[2]))
     date_cols = ['date']
     for col in date_cols:
         price_df[col] = (

@@ -22,7 +22,7 @@ sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 AO_RATINGS = sm_data_lake_dir+'/benzinga-rating-changes'
 AO_BUFFER = sm_data_lake_dir+'/buffer/der-m-ao'
 AO_SCORES_BUFFER = sm_data_lake_dir+'/buffer/der-m-ao-score'
-PRICE_DIR = sm_data_lake_dir+'/tda-daily-price'
+PRICE_DIR = sm_data_lake_dir+'/tda-daily-price/date'
 STOCK_AVG_BUFFER = sm_data_lake_dir+'/buffer/der-m-avg-price'
 TRAINING_BUFFER = sm_data_lake_dir+'/buffer/training-data'
 

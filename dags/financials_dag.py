@@ -54,6 +54,11 @@ find_upcoming_earnings = PythonOperator(
     op_kwargs={'date': '{{execution_date}}'},
     dag=dag,
 )
+make_upcoming_earning_table = PythonOperator(
+    task_id='make_upcoming_earning_table',
+    python_callable=mb.make_upcoming_table,
+    dag=dag,
+)
 mb_collect_earnings = SparkSubmitOperator(
     task_id='mb_collect_earnings',
     application=f'{pyspark_app_home}/dags/econ/runner/mb_collect_earnings.py',
@@ -217,6 +222,9 @@ sa_migrate_financials = SparkSubmitOperator(
         clear_to_collect_buffer >> 
         find_upcoming_earnings
     ],
+    find_upcoming_earnings >> 
+    make_upcoming_earning_table
+    ,
     find_upcoming_earnings >> 
     clear_mb_collected_buffer >>
     mb_collect_earnings >>

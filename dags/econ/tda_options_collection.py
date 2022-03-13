@@ -122,8 +122,6 @@ def clean_general(df):
 
     full_chain_df = pd.DataFrame()
     for i in df.index[:2]:
-        i
-
         r_calls = df.loc[i, 'callExpDateMap']
         tmp_calls = pd.concat([pd.DataFrame(r_calls[x]) for x in r_calls]).reset_index(drop=True)
         r_put = df.loc[i, 'putExpDateMap']
@@ -191,13 +189,20 @@ def get_single(ticker):
         )
         return True
     ## clean
-    chain_df = clean_general(df)    
-    _ = (
-        chain_df
-        .to_csv(SINGLE_WRITE_BUFFER+'{}.csv'.format(ticker), 
-                index=False)
-    )
-    return True
+    try:
+        ## error happening:
+        ## TypeError: 'float' object is not iterable
+        ## tmp_calls = pd.concat([pd.DataFrame(r_calls[x]) for x in r_calls]).reset_index(drop=True)
+        ## File "/Users/alexanderhubbard/projects/Duraflamengo/dags/econ/tda_options_collection.py", line 128
+        chain_df = clean_general(df)    
+        _ = (
+            chain_df
+            .to_csv(SINGLE_WRITE_BUFFER+'{}.csv'.format(ticker), 
+                    index=False)
+        )
+        return True
+    except:
+        return False
 
 def get_analytical(ticker):
     ## request

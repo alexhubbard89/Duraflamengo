@@ -249,7 +249,7 @@ def find_upcoming(date: dt.date) -> bool:
     )
     ## find tickers with upcoming projected date
     ## and combine with missing upcoming
-    fd = dt.datetime.now().date() + dt.timedelta(10)
+    fd = dt.datetime.now().date() + dt.timedelta(30)
     upcoming_earnings_df = (
         has_projected_date_df
         .loc[has_projected_date_df['date'] <= fd]
@@ -319,10 +319,11 @@ def migrate_mb_fins(ticker: str) -> bool:
     )
     new_df = pd.read_csv(fn_b)
     ## bring together
+    dist_cols = list(set(og_df.columns) - set('collection_date'))
     migrate_df = (
         og_df
         .append(new_df)
-        .drop_duplicates()
+        .drop_duplicates(dist_cols)
         .reset_index(drop=True)
     )
     _ = migrate_df.to_csv(WRITE_PATH_ALL_EARNINGS+'/{}.csv'.format(ticker), index=False)
@@ -359,7 +360,7 @@ def make_upcoming_table() -> bool:
     """
     Subset collect list to display
     tickers with antipated earnings
-    for the next week.
+    for the next two weeks.
     Write and replace csv for FE.
     """
     ue_df = pd.read_csv(BUFFER+'/to-collect/data.csv')
@@ -369,12 +370,12 @@ def make_upcoming_table() -> bool:
     )
     ue_df_subset = (
         ue_df
-        .loc[ue_df['date'] >= dt.datetime.today().date() + dt.timedelta(7)]
+        .loc[ue_df['date'] <= dt.datetime.today().date() + dt.timedelta(14)]
         .copy()
         .sort_values('date')
         .reset_index(drop=True)
     )
-    _ = ue_df_subset.to_csv(WRITE_PATH_NOW_EARNINGS+'/data.csv', index=False)
+    _ = ue_df_subset.to_parquet(WRITE_PATH_NOW_EARNINGS+'/data.parquet', index=False)
     ## make avilable for webapp
     engine = create_engine(os.environ['DATABASE_URL'], use_batch_mode=True)
     _ = (
@@ -382,4 +383,4 @@ def make_upcoming_table() -> bool:
         .to_sql('upcoming_earnings', schema='stomas', 
                 con=engine, if_exists='replace', index=False)
     )
-    return ue_df_subset
+    return True

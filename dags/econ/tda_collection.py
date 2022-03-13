@@ -25,6 +25,7 @@ sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 TDA = 'https://api.tdameritrade.com/v1/marketdata/{ticker}/pricehistory?apikey={api}&periodType={periodType}&period={period}&frequencyType={frequencyType}&frequency={frequency}&needExtendedHoursData=True'
 DAILY_WRITE_BUFFER = sm_data_lake_dir+'/buffer/tda-daily-price/'
 MINUTE_WRITE_BUFFER = sm_data_lake_dir+'/buffer/tda-minute-price/'
+PRICE_TICKER_DIR = sm_data_lake_dir+'/tda-daily-price/ticker'
 
 ## functions
 def make_minute_buffer():
@@ -220,30 +221,35 @@ def get_historical_daily_price(ticker, date):
         TDA
         .format(ticker=ticker.upper(),
                 api=Variable.get("TDA_API_KEY"),
-                periodType='month', 
-                period=1,
+                periodType='year', 
+                period=10,
                 frequencyType='daily',
                 frequency=1)
     )
     r = requests.get(url=url)
     try:
-        td_historical = pd.DataFrame(r.json()['candles'])
+        td_historical = (
+            pd.DataFrame(r.json()['candles'])
+            .rename(columns={'datetime': 'date'})
+        )
         if len(td_historical) == 0:
             return False
         ## format
-        td_historical['datetime'] = (
-            pd.to_datetime(td_historical['datetime'], unit='ms')
+        td_historical['ticker'] = ticker
+        td_historical['date'] = (
+            pd.to_datetime(td_historical['date'], unit='ms')
             .apply(lambda r: r.date())
         )
         ## slice
-        td_historical = (
+        td_historical_subset = (
             td_historical
-            .loc[td_historical['datetime'] == date]
-            .rename(columns={'datetime': 'date'})
+            .loc[td_historical['date'] == date]
             .reset_index(drop=True)
         )
-        td_historical['ticker'] = ticker
-        td_historical.to_csv(DAILY_WRITE_BUFFER+ticker+'.csv', index=False)
+        if not os.path.exists(f'{PRICE_TICKER_DIR}/{ticker}'):
+            os.makedirs(f'{PRICE_TICKER_DIR}/{ticker}')
+        td_historical.to_csv(f'{PRICE_TICKER_DIR}/{ticker}/data.csv', index=False)
+        td_historical_subset.to_csv(f'{DAILY_WRITE_BUFFER}{ticker}.csv', index=False)
         return True
     except:
         return False
@@ -359,7 +365,7 @@ def daily_price_pipeline(collect_threshold=.85, loop_collect=240):
         .load(DAILY_WRITE_BUFFER+'*')
     )
     print('write data')
-    _ = utils.write_spark(spark, collected_tickers_df, 'tda-daily-price', YESTERDAY)
+    _ = utils.write_spark(spark, collected_tickers_df, 'tda-daily-price/date', YESTERDAY)
 
     ## clear buffer directory
     print('clear buffer')
