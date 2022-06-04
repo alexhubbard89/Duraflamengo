@@ -1,11 +1,18 @@
+from distutils.log import error
 import pandas as pd
 import numpy as np
+from scipy import stats
 from pyspark.sql import DataFrame
 import shutil
 import datetime as dt
 import os
 import glob
 from airflow.models import Variable
+import fmp.settings as fmp_s
+from pyspark.sql import SparkSession
+from pyspark import SparkContext, SparkConf
+import pyspark.sql.types as T
+import pyspark.sql.functions as F
 
 sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 BUFFER_DIR = sm_data_lake_dir + "/buffer/{}/"
@@ -47,7 +54,21 @@ def clear_buffer(subdir):
     return True
 
 
-def write_spark(spark, df, subdir, date):
+def format_buffer(ds: dt.date, buffer_dir: str, yesterday: bool):
+    """
+    Clear buffer and make folder name the date
+    to pass through the downstream spark applications.
+    Convert ds type for airflow inputs.
+    """
+    ds = pd.to_datetime(ds).date()
+    if yesterday:
+        ds = ds - dt.timedelta(1)
+    clear_buffer(buffer_dir.split("/data/buffer")[1])
+    os.makedirs(buffer_dir + f"/{ds}")
+    return True
+
+
+def write_spark(spark, df, subdir, date, file_type="orc"):
     if date != None:
         file_path = DL_WRITE_DIR.format(subdir=subdir, date=str(date)[:10])
     else:
@@ -57,8 +78,8 @@ def write_spark(spark, df, subdir, date):
         df_sp = spark.createDataFrame(df)
     else:
         df_sp = df
-    _ = (
-        df_sp.write.format("orc")
+    (
+        df_sp.write.format(file_type)
         .mode("overwrite")
         .option("compression", "snappy")
         .save(file_path)
@@ -88,10 +109,30 @@ def read_many_csv(dir: str) -> pd.DataFrame:
     return df
 
 
-def read_protect_parquet(path):
-    try:
-        return pd.read_parquet(path)
-    except:
+def read_protect_parquet(path: str, params: dict = None):
+    """
+    Read a parquet file and slice, if needed.
+    This is used to ready many files in python.
+    """
+    if os.path.isfile(path):
+        df = pd.read_parquet(path)
+        if params != None:
+            if params["evaluation"] == "equal":
+                df = df.loc[df[params["column"]] == params["slice"]]
+            elif params["evaluation"] == "gt":
+                df = df.loc[df[params["column"]] > params["slice"]]
+            elif params["evaluation"] == "lt":
+                df = df.loc[df[params["column"]] < params["slice"]]
+            elif params["evaluation"] == "gt_e":
+                df = df.loc[df[params["column"]] >= params["slice"]]
+            elif params["evaluation"] == "lt_e":
+                df = df.loc[df[params["column"]] <= params["slice"]]
+            else:
+                raise ValueError("Incorrect evaluation method.")
+            if "column_slice" in params.keys():
+                df = df[params["column_slice"]]
+        return df
+    else:
         return pd.DataFrame()
 
 
@@ -99,8 +140,49 @@ def read_many_parquet(dir: str) -> pd.DataFrame:
     """
     Read partitioned data in CSV format.
     """
+    if dir[-1] != "/":
+        dir = dir + "/"
     file_list = glob.glob(dir + "*.parquet")
     df = pd.concat([read_protect_parquet(x) for x in file_list], ignore_index=True)
+    return df
+
+
+def distribute_read_many_parquet(ds: dt.date, path: str, params: dict = None):
+    """
+    Read all tickers for a given day.
+    This will be used to turn the ticker files
+    to a daily stream.
+    """
+    to_collect_df = pd.read_parquet(fmp_s.to_collect + f"/{ds}.parquet")
+    collection_list = to_collect_df["symbol"].values.tolist()
+    distribution_list = [f"{path}/{ticker}.parquet" for ticker in collection_list]
+    spark = SparkSession.builder.appName("read-files").getOrCreate()
+    sc = spark.sparkContext
+    dfs = (
+        sc.parallelize(distribution_list)
+        .map(lambda r: read_protect_parquet(r, params))
+        .collect()
+    )
+    sc.stop()
+    spark.stop()
+    return pd.concat(dfs, ignore_index=True)
+
+
+def distribute_read_orc(path: str, date_cols: list = []):
+    """
+    Read directory using orc.
+    This is used for the Mary API.
+    """
+    if type(date_cols) != list:
+        raise TypeError("date_col must be a list")
+    if path[-1] == "/":
+        path = path[:-1]
+    spark = SparkSession.builder.appName("read-api").getOrCreate()
+    df = spark.read.format("orc").option("path", path + "/*").load().toPandas()
+    spark.stop()
+    if len(date_cols) > 0:
+        for col in date_cols:
+            df[col] = pd.to_datetime(df[col]).apply(lambda r: r.date())
     return df
 
 
@@ -192,7 +274,17 @@ def format_data(df: pd.DataFrame, types: dict) -> pd.DataFrame:
     """
     for col in df.columns:
         if types[col] == dt.date:
-            df[col] = pd.to_datetime(df[col]).apply(lambda r: r.date())
+            df[col] = pd.to_datetime(df[col], errors="coerce").apply(lambda r: r.date())
+        elif types[col] == dt.datetime:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+        elif types[col] == bool:
+            df[col] = (
+                df[col]
+                .apply(
+                    lambda r: str(r).replace("true", "True").replace("false", "False")
+                )
+                .astype(types[col])
+            )
         else:
             df[col] = df[col].astype(types[col])
     return df
@@ -235,3 +327,75 @@ def migrate(path: str, fn: str, extention: str, data: pd.DataFrame) -> bool:
     elif extention == "csv":
         data.to_csv(save_f, index=False)
     return True
+
+
+def get_to_collect(
+    buffer_dir: str,
+):
+    """
+    Find list of tickers to distribute.
+    Use the buffer directory to find the
+    date to collect, then use the date
+    to find the to-collect dataset.
+    """
+    ds = pd.to_datetime([x for x in os.walk(buffer_dir + "/")][0][1][0]).date()
+    ## collect all
+    return pd.read_parquet(fmp_s.to_collect + f"/{ds}.parquet")["symbol"].tolist()
+
+
+def make_input(key: str, value: str, kwarg_dict: dict):
+    new_dict = kwarg_dict.copy()
+    new_dict[key] = value
+    return new_dict
+
+
+def find_max_date(path: str, date_ceiling: dt.date = dt.datetime.now()):
+    """Find max date from datalake source."""
+    date_list = [pd.to_datetime(x.split("/")[-1]) for x in glob.glob(path + "/*")]
+    return max([x.date() for x in date_list if x < date_ceiling])
+
+
+def get_high_volume(ds: dt.date, v_threshold: int = 500000, p_threshold: int = 10):
+    """Get tickers with high volume for a given date."""
+    max_date = find_max_date(fmp_s.avg_price, ds)
+    spark = SparkSession.builder.appName(f"read-volume-data").getOrCreate()
+    df = (
+        spark.read.format("orc")
+        .option("path", fmp_s.avg_price + f"/{max_date}/*.orc")
+        .load()
+        .filter(
+            (F.col("avg_volume_10") >= v_threshold)
+            & (F.col("avg_price_5") >= p_threshold)
+        )
+        .select("ticker")
+        .toPandas()
+    )
+    spark.stop()
+    return df["ticker"].tolist()
+
+
+def rolling_weighted_avg(r: list, weights: list):
+    if len(r) == len(weights):
+        return np.average(r, weights=weights)
+    else:
+        return np.nan
+
+
+def rolling_regression(y, window):
+    if len(y) == window:
+        x = range(len(y))
+        return stats.linregress(x, y).slope
+    else:
+        return np.nan
+
+
+def rolling_scale(r, window):
+    if len(r) == window:
+        ## Stretch z-scores to be between -3 and 3
+        f_max = r.max()
+        f_min = r.min()
+        f_bar = (f_max + f_min) / 2
+        A = 2 / (f_max - f_min)
+        return list(map(lambda x: round(A * (x - f_bar), 4), r))[-1]
+    else:
+        return np.nan

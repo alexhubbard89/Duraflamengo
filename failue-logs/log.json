@@ -1,0 +1,4 @@
+{
+    "description": "date_observed: airflow command",
+    "2022-05-06": "derived-metrics.make_ratios execution_date=2022-05-06 08:30:00+00:00"
+}

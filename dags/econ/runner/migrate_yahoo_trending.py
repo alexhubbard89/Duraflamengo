@@ -1,5 +1,5 @@
 ## python scripts
-import econ.yahoo as yahoo
+import yahoo.trending as trending
 
 if __name__ == "__main__":
-    _ = yahoo.migrate_trending()
+    _ = trending.migrate_trending()

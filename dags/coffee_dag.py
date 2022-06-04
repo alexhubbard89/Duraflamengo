@@ -14,7 +14,7 @@ local_tz = pendulum.timezone("US/Eastern")
 default_args = {
     "owner": "alex",
     "depends_on_past": False,
-    "start_date": datetime(2022, 3, 14, tzinfo=local_tz),
+    "start_date": datetime(2022, 3, 13, tzinfo=local_tz),
     "email": ["alexhubbard89@gmail.com"],
     "email_on_failure": False,
     "email_on_retry": False,
@@ -26,13 +26,19 @@ default_args = {
 dag = DAG(
     dag_id="morning-coffee-run",
     default_args=default_args,
-    catchup=False,
+    catchup=True,
     schedule_interval="30 5 * * *",  ## 5:30am Daily
 )
 
 collect_delisted = PythonOperator(
     task_id="collect_delisted",
     python_callable=coffee.collect_delisted,
+    dag=dag,
+)
+
+collect_market_constituents = PythonOperator(
+    task_id="collect_market_constituents",
+    python_callable=coffee.collect_market_constituents,
     dag=dag,
 )
 
@@ -55,4 +61,9 @@ make_collection_list = PythonOperator(
     },
 )
 
-[collect_delisted >> collected_calendar_data >> make_collection_list]
+[
+    collect_delisted
+    >> collect_market_constituents
+    >> collected_calendar_data
+    >> make_collection_list
+]
