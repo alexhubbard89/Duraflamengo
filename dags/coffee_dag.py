@@ -33,12 +33,14 @@ dag = DAG(
 collect_delisted = PythonOperator(
     task_id="collect_delisted",
     python_callable=coffee.collect_delisted,
+    execution_timeout=timedelta(minutes=10),
     dag=dag,
 )
 
 collect_market_constituents = PythonOperator(
     task_id="collect_market_constituents",
     python_callable=coffee.collect_market_constituents,
+    execution_timeout=timedelta(minutes=10),
     dag=dag,
 )
 
@@ -50,6 +52,7 @@ collected_calendar_data = PythonOperator(
         "ds": "{{ ds }}",
         "ds_delta": 14,
     },
+    execution_timeout=timedelta(minutes=10),
 )
 
 make_collection_list = PythonOperator(
@@ -59,6 +62,7 @@ make_collection_list = PythonOperator(
     op_kwargs={
         "ds": "{{ ds }}",
     },
+    execution_timeout=timedelta(minutes=10),
 )
 
 [

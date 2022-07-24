@@ -2,8 +2,7 @@ from fmp import stocks
 import os
 from datetime import datetime, timedelta
 import pendulum
-import common.utils as utils
-import fmp.settings as s
+import derived_metrics.asset_metrics as asset_metrics
 
 ## airflow
 from airflow import DAG
@@ -51,6 +50,7 @@ collect_peers = PythonOperator(
         "ds": " {{ ts_nodash_with_tz }} ",
     },
     dag=dag,
+    execution_timeout=timedelta(minutes=10),
 )
 
 collect_dcf = SparkSubmitOperator(
@@ -330,8 +330,16 @@ collect_company_profile = SparkSubmitOperator(
     env_vars={"collect_company_profile_ds": " {{ ts_nodash_with_tz }} "},
 )
 
+attach_metrics = PythonOperator(
+    task_id="attach_metrics",
+    python_callable=asset_metrics.attach_metrics,
+    op_kwargs={"ds": " {{ execution_date }} ", "window": 20, "yesterday": "True"},
+    dag=dag,
+    execution_timeout=timedelta(minutes=10),
+)
+
 [
-    collect_all_full_price,
+    collect_all_full_price >> attach_metrics,
     collect_peers,
     collect_dcf,
     collect_rating,

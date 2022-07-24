@@ -26,6 +26,14 @@ delisted_companies = DL_DIR + "/fmp/delisted-companies/latest.parquet"
 buffer_historical_daily_price_full = DL_DIR + "/buffer/fmp/historical-daily-price-full"
 historical_daily_price_full = DL_DIR + "/fmp/historical-daily-price-full"
 historical_ticker_price_full = DL_DIR + "/fmp/historical-ticker-price-full"
+## Historical price minute
+buffer_historical_thirty_minute_price = (
+    DL_DIR + "/buffer/fmp/historical-thirty-minute-price"
+)
+historical_thirty_minute_price = DL_DIR + "/fmp/historical-thirty-minute-price"
+historical_thirty_minute_ticker_price = (
+    DL_DIR + "/fmp/historical-thirty-minute-ticker-price"
+)
 ## Discounted cash flow
 buffer_dcf = DL_DIR + "/buffer/fmp/dcf"
 dcf = DL_DIR + "/fmp/dcf"
@@ -183,6 +191,10 @@ DELISTED_COMPANIES = FMP + "/v3/delisted-companies?page={PAGE}&apikey={API}"
 HISTORICAL_PRICE_FULL = (
     FMP
     + "/v3/historical-price-full/{TICKER}?serietype=bar&from={DSS}&to={DSE}&apikey={API}"
+)
+HISTORICAL_THIRTY_MINUTE_PRICE = (
+    FMP
+    + "/v3/historical-chart/30min/{TICKER}?serietype=bar&from={DSS}&to={DSE}&apikey={API}"
 )
 DCF = FMP + "/v3/historical-daily-discounted-cash-flow/" + TL_SUFFIX
 HISTORICAL_RATING = FMP + "/v3/historical-rating/" + TL_SUFFIX
@@ -504,6 +516,16 @@ price_full_types = {
     "vwap": float,
     "label": str,
     "changeOverTime": float,
+    "symbol": str,
+}
+
+thirty_minute_price_types = {
+    "date": dt.datetime,
+    "open": float,
+    "high": float,
+    "low": float,
+    "close": float,
+    "volume": float,
     "symbol": str,
 }
 

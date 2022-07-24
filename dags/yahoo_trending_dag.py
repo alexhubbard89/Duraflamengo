@@ -38,6 +38,7 @@ dag = DAG(
 collect_yahoo_trending = PythonOperator(
     task_id="collect_yahoo_trending",
     python_callable=trending.get_yahoo_trending,
+    execution_timeout=timedelta(minutes=10),
     dag=dag,
 )
 
@@ -55,6 +56,7 @@ migrate_yahoo_trending = SparkSubmitOperator(
 clear_buffer_yahoo_trending = PythonOperator(
     task_id="clear_buffer_yahoo_trending",
     python_callable=trending.clear_yahoo_trending_buffer,
+    execution_timeout=timedelta(minutes=1),
     dag=dag,
 )
 

@@ -1,15 +1,14 @@
 ## spark
+from matplotlib.pyplot import get
 from pyspark.sql import SparkSession
-from pyspark import SparkContext, SparkConf
 
-from io import StringIO
 from typing import Callable
 import pandas as pd
 import datetime as dt
 import requests
 import os
-import fmp.settings as s
 import common.utils as utils
+import tda.collect as tda
 import glob
 from time import sleep
 
@@ -158,7 +157,10 @@ def collect_generic_distributed(
     ## collect all
     ds = pd.to_datetime([x for x in os.walk(buffer_loc + "/")][0][1][0]).date()
     kwargs["ds"] = ds
-    collection_list = get_distribution_list(buffer_loc)
+    if get_distribution_list == utils.get_to_collect:
+        collection_list = get_distribution_list(buffer_loc)
+    elif get_distribution_list == tda.get_option_collection_list:
+        collection_list = get_distribution_list(ds)
     while len(collection_list) > 0:
         distribution_list = [
             utils.make_input("ticker", t, kwargs) for t in collection_list

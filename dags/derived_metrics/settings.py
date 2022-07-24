@@ -13,6 +13,8 @@ industry_ratios = DL_DIR + "/derived-measurements/industry-ratios"
 sector_ratios = DL_DIR + "/derived-measurements/sector-ratios"
 industry_rating = DL_DIR + "/derived-measurements/industry-rating"
 sector_rating = DL_DIR + "/derived-measurements/sector-rating"
+## other
+asset_metrics = DL_DIR + "/derived-measurements/asset-metrics"
 
 
 ## Data types
@@ -83,6 +85,33 @@ sector_rating_types = {
     "50%": float,
     "75%": float,
     "max": float,
+}
+
+asset_metrics_types = {
+    "close": float,
+    "date": dt.date,
+    "open": float,
+    "symbol": str,
+    "volume": float,
+    "close_slope": float,
+    "close_avg": float,
+    "volume_avg": float,
+    "description": str,
+    "discount": str,
+    "long_term": str,
+    "mid_term": str,
+    "resistance": float,
+    "short_term": str,
+    "stop_loss": float,
+    "support": float,
+    "target_price": float,
+    "avg_rating": float,
+    "avg_pt": float,
+    "n_rating": float,
+    "max_date": dt.date,
+    "srv_compare": float,
+    "slrv_compare": float,
+    "growth_rate": float,
 }
 
 ## maps

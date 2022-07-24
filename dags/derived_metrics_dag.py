@@ -56,6 +56,7 @@ move_raw_files_pv = PythonOperator(
         "days": 400,
         "buffer_loc": STOCK_AVG_BUFFER + "/raw",
     },
+    execution_timeout=timedelta(minutes=5),
 )
 prepare_pv = SparkSubmitOperator(
     task_id="prepare_pv",
@@ -91,22 +92,28 @@ clear_pv_prepared_buffer = PythonOperator(
     python_callable=utils.clear_buffer,
     op_kwargs={"subdir": "der-m-avg-price/prepared"},
     dag=dag,
+    execution_timeout=timedelta(minutes=5),
 )
 clear_pv_raw_buffer = PythonOperator(
     task_id="clear_pv_raw_buffer",
     python_callable=utils.clear_buffer,
     op_kwargs={"subdir": "der-m-avg-price/raw"},
     dag=dag,
+    execution_timeout=timedelta(minutes=1),
 )
 clear_pv_finished_buffer = PythonOperator(
     task_id="clear_pv_finished_buffer",
     python_callable=utils.clear_buffer,
     op_kwargs={"subdir": "der-m-avg-price/finished"},
     dag=dag,
+    execution_timeout=timedelta(minutes=1),
 )
 
 make_business_health = PythonOperator(
-    task_id="make_business_health", python_callable=bh.pipeline, dag=dag
+    task_id="make_business_health",
+    python_callable=bh.pipeline,
+    dag=dag,
+    execution_timeout=timedelta(minutes=10),
 )
 
 make_ratios = SparkSubmitOperator(

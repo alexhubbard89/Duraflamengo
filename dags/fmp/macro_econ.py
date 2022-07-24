@@ -32,7 +32,7 @@ def collect_sector_performance():
 def collect_sector_pe(ds: dt.date, yesterday: bool = True):
     """Collect sector price earnings ration by date."""
     ds = pd.to_datetime(ds).date()
-    if yesterday:
+    if utils.strbool(yesterday):
         ds = ds - dt.timedelta(1)
     config_ = {
         "ds": ds,
@@ -46,7 +46,7 @@ def collect_sector_pe(ds: dt.date, yesterday: bool = True):
 def collect_industry_pe(ds: dt.date, yesterday: bool = True):
     """Collect sector price earnings ration by date."""
     ds = pd.to_datetime(ds).date()
-    if yesterday:
+    if utils.strbool(yesterday):
         ds = ds - dt.timedelta(1)
     config_ = {
         "ds": ds,
@@ -60,7 +60,7 @@ def collect_industry_pe(ds: dt.date, yesterday: bool = True):
 def collect_treasury_rate(ds: dt.date, yesterday: bool = True):
     """Collect sector price earnings ration by date."""
     ds = pd.to_datetime(ds).date()
-    if yesterday:
+    if utils.strbool(yesterday):
         ds = ds - dt.timedelta(1)
     config_ = {
         "ds": ds,

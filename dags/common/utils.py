@@ -13,6 +13,7 @@ from pyspark.sql import SparkSession
 from pyspark import SparkContext, SparkConf
 import pyspark.sql.types as T
 import pyspark.sql.functions as F
+from distutils.util import strtobool
 
 sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 BUFFER_DIR = sm_data_lake_dir + "/buffer/{}/"
@@ -61,7 +62,7 @@ def format_buffer(ds: dt.date, buffer_dir: str, yesterday: bool):
     Convert ds type for airflow inputs.
     """
     ds = pd.to_datetime(ds).date()
-    if yesterday:
+    if strbool(yesterday):
         ds = ds - dt.timedelta(1)
     clear_buffer(buffer_dir.split("/data/buffer")[1])
     os.makedirs(buffer_dir + f"/{ds}")
@@ -114,36 +115,60 @@ def read_protect_parquet(path: str, params: dict = None):
     Read a parquet file and slice, if needed.
     This is used to ready many files in python.
     """
-    if os.path.isfile(path):
+    if os.path.isfile(path) | os.path.isdir(path):
         df = pd.read_parquet(path)
+        if len(df) == 0:
+            return pd.DataFrame()
         if params != None:
-            if params["evaluation"] == "equal":
-                df = df.loc[df[params["column"]] == params["slice"]]
-            elif params["evaluation"] == "gt":
-                df = df.loc[df[params["column"]] > params["slice"]]
-            elif params["evaluation"] == "lt":
-                df = df.loc[df[params["column"]] < params["slice"]]
-            elif params["evaluation"] == "gt_e":
-                df = df.loc[df[params["column"]] >= params["slice"]]
-            elif params["evaluation"] == "lt_e":
-                df = df.loc[df[params["column"]] <= params["slice"]]
-            else:
-                raise ValueError("Incorrect evaluation method.")
+            if "evaluation" in params.keys():
+                if params["evaluation"] == "equal":
+                    df = df.loc[df[params["column"]] == params["slice"]]
+                elif params["evaluation"] == "gt":
+                    df = df.loc[df[params["column"]] > params["slice"]]
+                elif params["evaluation"] == "lt":
+                    df = df.loc[df[params["column"]] < params["slice"]]
+                elif params["evaluation"] == "gt_e":
+                    df = df.loc[df[params["column"]] >= params["slice"]]
+                elif params["evaluation"] == "lt_e":
+                    df = df.loc[df[params["column"]] <= params["slice"]]
+                elif params["evaluation"] == "not_null":
+                    if "columns" in params.keys():
+                        for col in params["columns"]:
+                            df = df.loc[df[col].notnull()]
+                    else:
+                        df = df.loc[df[params["column"]].notnull()]
+                else:
+                    raise ValueError("Incorrect evaluation method.")
             if "column_slice" in params.keys():
-                df = df[params["column_slice"]]
+                df = df[list(params["column_slice"])]
         return df
     else:
         return pd.DataFrame()
 
 
-def read_many_parquet(dir: str) -> pd.DataFrame:
+def read_many_dir_parquet(
+    dir: str, subdir_list: list = [], params: dict = None
+) -> pd.DataFrame:
+    """
+    Read all parquet files in a list of sub directories.
+    """
+    if dir[-1] != "/":
+        dir = dir + "/"
+    return pd.concat(
+        [read_protect_parquet(dir + x, params) for x in subdir_list], ignore_index=True
+    )
+
+
+def read_many_parquet(dir: str, params: dict = None) -> pd.DataFrame:
     """
     Read partitioned data in CSV format.
     """
     if dir[-1] != "/":
         dir = dir + "/"
     file_list = glob.glob(dir + "*.parquet")
-    df = pd.concat([read_protect_parquet(x) for x in file_list], ignore_index=True)
+    df = pd.concat(
+        [read_protect_parquet(x, params) for x in file_list], ignore_index=True
+    )
     return df
 
 
@@ -339,8 +364,23 @@ def get_to_collect(
     to find the to-collect dataset.
     """
     ds = pd.to_datetime([x for x in os.walk(buffer_dir + "/")][0][1][0]).date()
-    ## collect all
-    return pd.read_parquet(fmp_s.to_collect + f"/{ds}.parquet")["symbol"].tolist()
+    ## find date or max date
+    try:
+        return pd.read_parquet(fmp_s.to_collect + f"/{ds}.parquet")["symbol"].tolist()
+    except FileNotFoundError as e:
+        new_ds = max(
+            [
+                d
+                for d in [
+                    pd.to_datetime(x.split(".")[0]).date()
+                    for x in [x for x in os.walk(fmp_s.to_collect)][0][2]
+                ]
+                if d <= ds
+            ]
+        )
+        return pd.read_parquet(fmp_s.to_collect + f"/{new_ds}.parquet")[
+            "symbol"
+        ].tolist()
 
 
 def make_input(key: str, value: str, kwarg_dict: dict):
@@ -382,11 +422,15 @@ def rolling_weighted_avg(r: list, weights: list):
 
 
 def rolling_regression(y, window):
-    if len(y) == window:
-        x = range(len(y))
-        return stats.linregress(x, y).slope
-    else:
-        return np.nan
+    rolling_y = [x for x in pd.Series(y).rolling(window)]
+    slope_list = []
+    for y in rolling_y:
+        if len(y) > 1:
+            x = range(len(y))
+            slope_list.append(stats.linregress(x, y).slope)
+        else:
+            slope_list.append(np.nan)
+    return pd.Series(slope_list)
 
 
 def rolling_scale(r, window):
@@ -399,3 +443,13 @@ def rolling_scale(r, window):
         return list(map(lambda x: round(A * (x - f_bar), 4), r))[-1]
     else:
         return np.nan
+
+
+def strbool(str_: str):
+    """
+    Convert string to boolean.
+    This is helpful for airflow variables.
+    """
+    if type(str_) == str:
+        str_ = strtobool(str_)
+    return str_

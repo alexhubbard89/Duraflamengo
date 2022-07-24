@@ -44,6 +44,7 @@ collect_data = PythonOperator(
     task_id="collect_data",
     python_callable=bc.get_unusual_options,
     op_kwargs={"date": "{{execution_date}}"},
+    execution_timeout=timedelta(minutes=10),
     dag=dag,
 )
 migrate_data = SparkSubmitOperator(

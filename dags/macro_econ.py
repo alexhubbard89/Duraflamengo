@@ -34,6 +34,7 @@ collect_sector_performance = PythonOperator(
     task_id="collect_sector_performance",
     python_callable=macro_econ.collect_sector_performance,
     dag=dag,
+    execution_timeout=timedelta(minutes=10),
 )
 
 collect_sector_pe = PythonOperator(
@@ -41,6 +42,7 @@ collect_sector_pe = PythonOperator(
     python_callable=macro_econ.collect_sector_pe,
     dag=dag,
     op_kwargs={"ds": "{{ ds }}"},
+    execution_timeout=timedelta(minutes=10),
 )
 
 collect_industry_pe = PythonOperator(
@@ -48,6 +50,7 @@ collect_industry_pe = PythonOperator(
     python_callable=macro_econ.collect_industry_pe,
     dag=dag,
     op_kwargs={"ds": "{{ ds }}"},
+    execution_timeout=timedelta(minutes=10),
 )
 
 collect_treasury_rate = PythonOperator(
@@ -55,6 +58,7 @@ collect_treasury_rate = PythonOperator(
     python_callable=macro_econ.collect_treasury_rate,
     dag=dag,
     op_kwargs={"ds": "{{ ds }}"},
+    execution_timeout=timedelta(minutes=10),
 )
 
 collect_all_economic_indicators = PythonOperator(
@@ -62,6 +66,7 @@ collect_all_economic_indicators = PythonOperator(
     python_callable=macro_econ.collect_all_economic_indicators,
     dag=dag,
     op_kwargs={"ds": "{{ ds }}"},
+    execution_timeout=timedelta(minutes=10),
 )
 
 [

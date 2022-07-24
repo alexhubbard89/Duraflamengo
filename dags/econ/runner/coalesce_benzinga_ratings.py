@@ -4,6 +4,7 @@ from pyspark.sql import SparkSession
 from common.spoof import Ip_Spoofer
 import common.utils as utils
 
+RATINGS_CHANGE_DIR = os.environ["DL_DIR"] + "/benzinga-rating-changes"
 RATINGS_COALESCE_DIR = os.environ["DL_DIR"] + "/benzinga-rating-changes-coalesce"
 
 
@@ -11,7 +12,7 @@ if __name__ == "__main__":
     spark = SparkSession.builder.appName("migrate-rating").getOrCreate()
     ratings_df = (
         spark.read.format("orc")
-        .option("path", RATINGS_COALESCE_DIR + "/*")
+        .option("path", RATINGS_CHANGE_DIR + "/*")
         .load()
         .toPandas()
     )

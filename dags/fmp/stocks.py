@@ -46,6 +46,39 @@ def collect_full_price(ds: dt.date, ticker: str):
     return True
 
 
+def collect_thirty_minute_price(ds: dt.date, ticker: str):
+    """
+    Collect full price for a ticker and save to data-lake.
+    Save the full file to easily query all info for a ticker.
+    Make a subset of the given day to construct a full
+    snapshot of all tickers on the day.
+    Date is converted for airflow.
+
+    Inputs: Date and ticker to collect.
+    """
+    ds_start = dt.date(1980, 1, 1)
+    r = requests.get(
+        s.HISTORICAL_THIRTY_MINUTE_PRICE.format(
+            DSS=ds_start, DSE=ds, TICKER=ticker, API=FMP_KEY
+        )
+    )
+    data = r.json()
+    if len(data) == 0:
+        return False
+    df = pd.DataFrame(data)
+    df["symbol"] = ticker
+    df_typed = utils.format_data(df, s.thirty_minute_price_types)
+    df_typed_end = df_typed.loc[df_typed["date"].apply(lambda r: r.date()) == ds].copy()
+    ## save
+    df_typed_end.to_parquet(
+        s.buffer_historical_thirty_minute_price + f"/{ds}/{ticker}.parquet", index=False
+    )
+    df_typed.to_parquet(
+        s.historical_thirty_minute_ticker_price + f"/{ticker}.parquet", index=False
+    )
+    return True
+
+
 def collect_peers(ds: dt.date):
     r = requests.get(s.STOCK_PEERS.format(API=FMP_KEY))
     data = r.content.decode("utf8")
@@ -68,7 +101,7 @@ def collect_dcf(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.dcf_ticker,
         "dtypes": s.dcf_types,
     }
-    utils.format_buffer(ds, s.buffer_dcf, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_dcf, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.dcf,
@@ -87,7 +120,9 @@ def collect_rating(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.historical_rating_ticker,
         "dtypes": s.rating_types,
     }
-    utils.format_buffer(ds, s.buffer_historical_rating, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_historical_rating, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.historical_rating,
@@ -106,7 +141,9 @@ def collect_enterprise_values_annual(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.enterprise_values_annual,
         "dtypes": s.enterprise_values_types,
     }
-    utils.format_buffer(ds, s.buffer_enterprise_values_annual, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_enterprise_values_annual, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.enterprise_values_annual,
@@ -125,7 +162,9 @@ def collect_enterprise_values_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.enterprise_values_quarter,
         "dtypes": s.enterprise_values_types,
     }
-    utils.format_buffer(ds, s.buffer_enterprise_values_quarter, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_enterprise_values_quarter, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.enterprise_values_quarter,
@@ -144,7 +183,7 @@ def collect_grade(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.grade_ticker,
         "dtypes": s.grade_types,
     }
-    utils.format_buffer(ds, s.buffer_grade, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_grade, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.grade,
@@ -163,7 +202,9 @@ def collect_sentiment(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.social_sentiment_ticker,
         "dtypes": s.social_sentiment_types,
     }
-    utils.format_buffer(ds, s.buffer_social_sentiment, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_social_sentiment, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.social_sentiment,
@@ -182,7 +223,9 @@ def collect_analyst_estimates(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.analyst_estimates_ticker,
         "dtypes": s.analyst_estimates_types,
     }
-    utils.format_buffer(ds, s.buffer_analyst_estimates, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_analyst_estimates, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.analyst_estimates,
@@ -201,7 +244,9 @@ def collect_analyst_estimates_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.analyst_estimates_quarter_ticker,
         "dtypes": s.analyst_estimates_types,
     }
-    utils.format_buffer(ds, s.buffer_analyst_estimates_quarter, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_analyst_estimates_quarter, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.analyst_estimates_quarter,
@@ -220,7 +265,7 @@ def collect_balance_sheets(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_a_bs_ticker,
         "dtypes": s.balance_sheet_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_bs, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_a_bs, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_a_bs,
@@ -239,7 +284,7 @@ def collect_balance_sheets_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_q_bs_ticker,
         "dtypes": s.balance_sheet_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_bs, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_q_bs, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_q_bs,
@@ -258,7 +303,7 @@ def collect_cash_flow(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_a_cf_ticker,
         "dtypes": s.cash_flow_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_cf, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_a_cf, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_a_cf,
@@ -277,7 +322,7 @@ def collect_cash_flow_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_q_cf_ticker,
         "dtypes": s.cash_flow_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_cf, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_q_cf, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_q_cf,
@@ -296,7 +341,7 @@ def collect_income(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_a_i_ticker,
         "dtypes": s.income_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_i, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_a_i, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_a_i,
@@ -315,7 +360,7 @@ def collect_income_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_q_i_ticker,
         "dtypes": s.income_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_i, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_q_i, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_q_i,
@@ -334,7 +379,7 @@ def collect_key_metrics(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_a_km_ticker,
         "dtypes": s.key_metrics_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_km, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_a_km, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_a_km,
@@ -353,7 +398,7 @@ def collect_key_metrics_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_a_km_ticker,
         "dtypes": s.key_metrics_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_km, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_a_km, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_a_km,
@@ -372,7 +417,7 @@ def collect_ratios(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_a_r_ticker,
         "dtypes": s.ratios_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_r, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_a_r, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_a_r,
@@ -391,7 +436,7 @@ def collect_ratios_quarter(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.fmp_q_r_ticker,
         "dtypes": s.ratios_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_r, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_fmp_q_r, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.fmp_q_r,
@@ -410,7 +455,9 @@ def collect_earnings_surprises(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.earnings_surprises_ticker,
         "dtypes": s.earnings_surprises_types,
     }
-    utils.format_buffer(ds, s.buffer_earnings_surprises, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_earnings_surprises, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.earnings_surprises,
@@ -429,7 +476,9 @@ def collect_insider_trading(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.insider_trading_ticker,
         "dtypes": s.insider_trading_types,
     }
-    utils.format_buffer(ds, s.buffer_insider_trading, yesterday=yesterday)
+    utils.format_buffer(
+        ds, s.buffer_insider_trading, yesterday=utils.strbool(yesterday)
+    )
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.insider_trading,
@@ -449,7 +498,7 @@ def collect_stock_news(ds: dt.date, yesterday: bool = True):
         "dtypes": s.stock_news_types,
         "date_col": "publishedDate",
     }
-    utils.format_buffer(ds, s.buffer_stock_news, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_stock_news, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.stock_news,
@@ -468,7 +517,7 @@ def collect_press_releases(ds: dt.date, yesterday: bool = True):
         "dl_ticker_dir": s.press_releases_ticker,
         "dtypes": s.press_release_types,
     }
-    utils.format_buffer(ds, s.buffer_press_releases, yesterday=yesterday)
+    utils.format_buffer(ds, s.buffer_press_releases, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
         get_distribution_list=utils.get_to_collect,
         dl_loc=s.press_releases,

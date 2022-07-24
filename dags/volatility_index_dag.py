@@ -16,37 +16,37 @@ pyspark_app_home = Variable.get("PYSPARK_APP_HOME")
 
 local_tz = pendulum.timezone("US/Eastern")
 default_args = {
-    'owner': 'alex',
-    'depends_on_past': False,
-    'start_date': datetime(2022, 2, 2, tzinfo=local_tz),
-    'email': ['alexhubbard89@gmail.com'],
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 3,
-    'retry_delay': timedelta(minutes=5)
+    "owner": "alex",
+    "depends_on_past": False,
+    "start_date": datetime(2022, 2, 2, tzinfo=local_tz),
+    "email": ["alexhubbard89@gmail.com"],
+    "email_on_failure": False,
+    "email_on_retry": False,
+    "retries": 3,
+    "retry_delay": timedelta(minutes=5),
 }
 
 
 ## make DAG tree
-dag = DAG(dag_id='volatility-index',
-          default_args=default_args,
-          catchup=False,
-          schedule_interval=timedelta(minutes=20)
-          )
+dag = DAG(
+    dag_id="volatility-index",
+    default_args=default_args,
+    catchup=False,
+    schedule_interval=timedelta(minutes=20),
+)
 
 collect_current = PythonOperator(
-    task_id='collect_current' ,
+    task_id="collect_current",
     python_callable=vix.get_current,
-    dag=dag
+    execution_timeout=timedelta(minutes=10),
+    dag=dag,
 )
 
 collect_historical = PythonOperator(
-    task_id='collect_historical' ,
+    task_id="collect_historical",
     python_callable=vix.get_historical,
-    dag=dag
+    execution_timeout=timedelta(minutes=10),
+    dag=dag,
 )
 
-[
-    collect_current,
-    collect_historical
-]
+[collect_current, collect_historical]
