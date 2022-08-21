@@ -1,17 +1,11 @@
 import pandas as pd
-import numpy as np
 import datetime as dt
-import string
-import pytz
 import glob
 from scipy import stats
 import pandas_market_calendars as mcal
 
 ## spark
 from pyspark.sql import SparkSession
-import pyspark.sql.types as T
-import pyspark.sql.functions as F
-from pyspark import SparkContext, SparkConf
 
 ## Local code
 import common.utils as utils

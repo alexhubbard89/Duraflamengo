@@ -259,7 +259,6 @@ def attach_metrics(
     It then works intraday, collecting prices every hour on
     the half hour mark, found in the discovery_dag.
     """
-    print("Starting")
     ds = pd.to_datetime(ds).date()
     if utils.strbool(yesterday):
         ds = ds - dt.timedelta(1)
@@ -280,5 +279,3 @@ def attach_metrics(
     full_df["growth_rate"] = (full_df["avg_pt"] / full_df["close"]) - 1
     full_df = utils.format_data(full_df, dm_s.asset_metrics_types)
     full_df.to_parquet(f"{dm_s.asset_metrics}/{ds}.parquet", index=False)
-    print(full_df)
-    print(f"{dm_s.asset_metrics}/{ds}.parquet")

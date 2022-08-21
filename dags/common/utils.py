@@ -391,7 +391,9 @@ def make_input(key: str, value: str, kwarg_dict: dict):
 
 def find_max_date(path: str, date_ceiling: dt.date = dt.datetime.now()):
     """Find max date from datalake source."""
-    date_list = [pd.to_datetime(x.split("/")[-1]) for x in glob.glob(path + "/*")]
+    date_list = [
+        pd.to_datetime(x.split("/")[-1].split(".")[0]) for x in glob.glob(path + "/*")
+    ]
     return max([x.date() for x in date_list if x < date_ceiling])
 
 
@@ -400,18 +402,18 @@ def get_high_volume(ds: dt.date, v_threshold: int = 500000, p_threshold: int = 1
     max_date = find_max_date(fmp_s.avg_price, ds)
     spark = SparkSession.builder.appName(f"read-volume-data").getOrCreate()
     df = (
-        spark.read.format("orc")
-        .option("path", fmp_s.avg_price + f"/{max_date}/*.orc")
+        spark.read.format("parquet")
+        .option("path", fmp_s.avg_price + f"/{max_date}.parquet")
         .load()
         .filter(
             (F.col("avg_volume_10") >= v_threshold)
             & (F.col("avg_price_5") >= p_threshold)
         )
-        .select("ticker")
+        .select("symbol")
         .toPandas()
     )
     spark.stop()
-    return df["ticker"].tolist()
+    return df["symbol"].tolist()
 
 
 def rolling_weighted_avg(r: list, weights: list):

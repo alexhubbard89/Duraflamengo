@@ -4,7 +4,7 @@ import os
 ## paths
 DL_DIR = os.environ["DL_DIR"]
 ## price
-price_dir = DL_DIR + "/tda-daily-price/date"
+price_dir = DL_DIR + "/fmp/historical-daily-price-full"
 stock_avg_buffer = DL_DIR + "/buffer/der-m-avg-price"
 avg_price = DL_DIR + "/derived-measurements/avg-price-vol"
 # ratios

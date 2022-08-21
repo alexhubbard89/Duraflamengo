@@ -1,23 +1,14 @@
 import pandas as pd
-import numpy as np
 import datetime as dt
-import string
-import pytz
 import glob
-import shutil, os
 
 ## spark
 from pyspark.sql import SparkSession
 import pyspark.sql.types as T
-import pyspark.sql.functions as F
-from pyspark import SparkContext, SparkConf
 
 ## Local code
 import common.utils as utils
 import derived_metrics.settings as s
-
-## locations
-from airflow.models import Variable
 
 
 def prepare_pv() -> bool:
@@ -63,7 +54,7 @@ def prepare_pv() -> bool:
     return True
 
 
-def make_pv() -> bool:
+def make_pv(ds: dt.date, yesterday: bool = True) -> bool:
     """
     Make and write dialy price and volume
     averages to the data lake.
@@ -71,66 +62,89 @@ def make_pv() -> bool:
     typical averaging.
 
     """
-    ## load data
-    price_df = utils.read_many_csv(s.stock_avg_buffer + "/prepared/")
-    price_df["date"] = pd.to_datetime(price_df["date"]).apply(lambda r: r.date())
-    ## fill missing close prices
+    ds = pd.to_datetime(ds).date()
+    if utils.strbool(yesterday):
+        ds = ds - dt.timedelta(1)
+    ## move the files to the buffer
+    op_kwargs = {
+        "data_loc": s.price_dir,
+        "date": ds,
+        "days": 400,
+        "buffer_loc": s.stock_avg_buffer + "/raw",
+    }
+    utils.move_files(**op_kwargs)
+    ## bulk load all parquet from buffer and clear buffer
+    ## reading all at once causes an error, hence the loop.
+    dfs = []
+    for fn in glob.glob(s.stock_avg_buffer + "/raw/*"):
+        dfs.append(pd.read_parquet(fn))
+    price_df = pd.concat(dfs, ignore_index=True)
+    utils.clear_buffer((s.stock_avg_buffer + "/raw").split("data/buffer/")[1])
+    date_base = pd.DataFrame(
+        [
+            x.date()
+            for x in pd.date_range(price_df["date"].min(), price_df["date"].max())
+        ],
+        columns=["date"],
+    )
+    date_base = date_base.loc[date_base["date"].apply(lambda r: r.weekday() < 5)]
+    price_df = date_base.merge(price_df, how="left", on="date")
     price_df["close"] = price_df["close"].fillna(method="ffill")
     ## make avg price
     price_avg_5 = (
-        price_df.groupby("ticker")["close"]
+        price_df.groupby("symbol")["close"]
         .rolling(5)
         .mean()
         .reset_index()
         .rename(columns={"level_1": "index", "close": "avg_price_5"})
         .set_index("index")
-        .drop("ticker", 1)
+        .drop("symbol", 1)
     )
     price_avg_10 = (
-        price_df.groupby("ticker")["close"]
+        price_df.groupby("symbol")["close"]
         .rolling(10)
         .mean()
         .reset_index()
         .rename(columns={"level_1": "index", "close": "avg_price_10"})
         .set_index("index")
-        .drop("ticker", 1)
+        .drop("symbol", 1)
     )
     price_avg_50 = (
-        price_df.groupby("ticker")["close"]
+        price_df.groupby("symbol")["close"]
         .rolling(50)
         .mean()
         .reset_index()
         .rename(columns={"level_1": "index", "close": "avg_price_50"})
         .set_index("index")
-        .drop("ticker", 1)
+        .drop("symbol", 1)
     )
     price_avg_200 = (
-        price_df.groupby("ticker")["close"]
+        price_df.groupby("symbol")["close"]
         .rolling(200, min_periods=1)
         .mean()
         .reset_index()
         .rename(columns={"level_1": "index", "close": "avg_price_200"})
         .set_index("index")
-        .drop("ticker", 1)
+        .drop("symbol", 1)
     )
     ## make avg vol
     volume_avg_5 = (
-        price_df.groupby("ticker")["volume"]
+        price_df.groupby("symbol")["volume"]
         .rolling(5)
         .mean()
         .reset_index()
         .rename(columns={"level_1": "index", "volume": "avg_volume_5"})
         .set_index("index")
-        .drop("ticker", 1)
+        .drop("symbol", 1)
     )
     volume_avg_10 = (
-        price_df.groupby("ticker")["volume"]
+        price_df.groupby("symbol")["volume"]
         .rolling(10)
         .mean()
         .reset_index()
         .rename(columns={"level_1": "index", "volume": "avg_volume_10"})
         .set_index("index")
-        .drop("ticker", 1)
+        .drop("symbol", 1)
     )
     ## join and subset columns
     price_df_full = (
@@ -141,7 +155,7 @@ def make_pv() -> bool:
         .join(volume_avg_5)
         .join(volume_avg_10)[
             [
-                "ticker",
+                "symbol",
                 "date",
                 "close",
                 "avg_price_5",
@@ -154,23 +168,10 @@ def make_pv() -> bool:
         ]
     )
     ## subset to analysis date
-    # get date
-    fn = (
-        glob.glob(s.stock_avg_buffer + "/prepared/*.csv")[0]
-        .split("/")[-1]
-        .split("T")[0]
-        .split(".csv")[0]
-        .split("-")
-    )
-    date = dt.date(int(fn[0]), int(fn[1]), int(fn[2])) - dt.timedelta(
-        1
-    )  ## bc collect yesterday prices
-    # filter
-    price_df_subset = price_df_full.loc[price_df_full["date"] == date]
+    price_df_subset = price_df_full.loc[price_df_full["date"] == ds]
     if len(price_df_subset) > 0:
-        _ = price_df_subset.to_csv(
-            s.stock_avg_buffer + "/finished/{}.csv".format(date), index=False
-        )
+        fn = f"{s.avg_price}/{ds}.parquet"
+        price_df_subset.to_parquet(fn, index=False)
     return True
 
 

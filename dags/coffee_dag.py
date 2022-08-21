@@ -40,6 +40,9 @@ collect_delisted = PythonOperator(
 collect_market_constituents = PythonOperator(
     task_id="collect_market_constituents",
     python_callable=coffee.collect_market_constituents,
+    op_kwargs={
+        "ds": "{{ ds }}",
+    },
     execution_timeout=timedelta(minutes=10),
     dag=dag,
 )

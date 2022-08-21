@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 import datetime as dt
 import common.utils as utils
@@ -7,8 +6,6 @@ import derived_metrics.settings as s
 import os
 
 from pyspark.sql import SparkSession
-import pyspark.sql.functions as F
-from pyspark import SparkContext, SparkConf
 
 
 def make_ratios(ds: dt.date):

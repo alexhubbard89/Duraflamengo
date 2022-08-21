@@ -27,7 +27,7 @@ default_args = {
 dag = DAG(
     dag_id="fmp-ticker-metrics-collection",
     default_args=default_args,
-    catchup=False,
+    catchup=True,
     schedule_interval="00 2 * * *",  ## 2:00am Daily
 )
 
