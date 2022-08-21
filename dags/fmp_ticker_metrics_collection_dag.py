@@ -15,7 +15,7 @@ local_tz = pendulum.timezone("US/Eastern")
 default_args = {
     "owner": "alex",
     "depends_on_past": False,
-    "start_date": datetime(2022, 3, 14, tzinfo=local_tz),
+    "start_date": datetime(2022, 8, 22, tzinfo=local_tz),
     "email": ["alexhubbard89@gmail.com"],
     "email_on_failure": False,
     "email_on_retry": False,
@@ -27,7 +27,7 @@ default_args = {
 dag = DAG(
     dag_id="fmp-ticker-metrics-collection",
     default_args=default_args,
-    catchup=True,
+    catchup=False,
     schedule_interval="00 2 * * *",  ## 2:00am Daily
 )
 
@@ -330,6 +330,18 @@ collect_company_profile = SparkSubmitOperator(
     env_vars={"collect_company_profile_ds": " {{ ts_nodash_with_tz }} "},
 )
 
+full_gardening = SparkSubmitOperator(
+    task_id="full_gardening",
+    application=f"{pyspark_app_home}/dags/fmp/runner/full_gardening.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="{{ task_instance.task_id }}",
+    execution_timeout=timedelta(minutes=10),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+    env_vars={"gardening_ds": " {{ ts_nodash_with_tz }} "},
+)
+
 attach_metrics = PythonOperator(
     task_id="attach_metrics",
     python_callable=asset_metrics.attach_metrics,
@@ -339,7 +351,7 @@ attach_metrics = PythonOperator(
 )
 
 [
-    collect_all_full_price >> attach_metrics,
+    collect_all_full_price >> full_gardening >> attach_metrics,
     collect_peers,
     collect_dcf,
     collect_rating,

@@ -10,8 +10,6 @@ import glob
 from airflow.models import Variable
 import fmp.settings as fmp_s
 from pyspark.sql import SparkSession
-from pyspark import SparkContext, SparkConf
-import pyspark.sql.types as T
 import pyspark.sql.functions as F
 from distutils.util import strtobool
 
