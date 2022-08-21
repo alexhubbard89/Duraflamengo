@@ -27,8 +27,8 @@ def options_discovery(ds: dt.date, distince_threshold: int = 0.25):
         asset_metrics_df.loc[
             (
                 (asset_metrics_df["srv_compare"].notnull())
-                & (asset_metrics_df["srv_compare"] < 1.01)
-                & (asset_metrics_df["srv_compare"] > -0.01)
+                & (asset_metrics_df["srv_compare"] < 1.05)
+                & (asset_metrics_df["srv_compare"] > -0.05)
             )
         ]
         .sort_values("srv_compare")[
@@ -43,6 +43,8 @@ def options_discovery(ds: dt.date, distince_threshold: int = 0.25):
                 "resistance",
                 "avg_rating",
                 "short_term",
+                "long_term",
+                "mid_term",
                 "avg_pt",
                 "n_rating",
                 "max_date",

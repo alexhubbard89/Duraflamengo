@@ -14,7 +14,7 @@ local_tz = pendulum.timezone("US/Eastern")
 default_args = {
     "owner": "alex",
     "depends_on_past": False,
-    "start_date": datetime(2022, 3, 28, tzinfo=local_tz),
+    "start_date": datetime(2022, 7, 25, tzinfo=local_tz),
     "email": ["alexhubbard89@gmail.com"],
     "email_on_failure": False,
     "email_on_retry": False,

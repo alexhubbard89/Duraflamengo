@@ -7,7 +7,7 @@ from pyspark.sql import SparkSession
 
 
 if __name__ == "__main__":
-    ds = pd.to_datetime(os.environ["der_ratios_ds"]).tz_convert("US/Eastern").date()
+    ds = pd.to_datetime(os.environ["ds"]).tz_convert("US/Eastern").date()
     if os.path.isdir(f"{s.historical_rating}/{ds}/"):
         ## get industry and sectory
         company_profile_df = utils.read_many_parquet(s.company_profile_ticker + "/")

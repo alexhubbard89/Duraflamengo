@@ -1,5 +1,6 @@
 ## python
 from analysis.options import options_discovery
+import analysis.credit_spreads as credit_spreads
 import derived_metrics.asset_metrics as asset_metrics
 from datetime import datetime, timedelta
 import pendulum
@@ -74,9 +75,18 @@ distributed_options_collection = SparkSubmitOperator(
     env_vars={"distributed_options_collection_ds": " {{ execution_date }} "},
 )
 
+credit_spreads_discovery = PythonOperator(
+    task_id="credit_spreads_discovery",
+    python_callable=credit_spreads.discovery_pipeline,
+    op_kwargs={"ds": "{{ ds }}"},
+    dag=dag,
+    execution_timeout=timedelta(minutes=10),
+)
+
 [
     collect_thirty_minute_price
     >> attach_metrics
     >> options_discovery
     >> distributed_options_collection
+    >> credit_spreads_discovery
 ]

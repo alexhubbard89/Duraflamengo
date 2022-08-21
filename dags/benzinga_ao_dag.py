@@ -20,7 +20,7 @@ local_tz = pendulum.timezone("US/Eastern")
 default_args = {
     "owner": "alex",
     "depends_on_past": False,
-    "start_date": datetime(2021, 11, 6, tzinfo=local_tz),
+    "start_date": datetime(2022, 1, 1, tzinfo=local_tz),
     "email": ["alexhubbard89@gmail.com"],
     "email_on_failure": False,
     "email_on_retry": False,
@@ -33,8 +33,9 @@ default_args = {
 dag = DAG(
     dag_id="benzinga-analyst-ratings",
     default_args=default_args,
-    catchup=False,
-    schedule_interval="0,15,30,45 6-23 * * 1-5"
+    catchup=True,
+    schedule_interval="0 2 * * *"
+    # schedule_interval="0,15,30,45 6-23 * * 1-5"
     ## “At minute 0, 15, 30, and 45 past every hour
     ## from 6 through 23 on every day-of-week
     ## from Monday through Friday.”
