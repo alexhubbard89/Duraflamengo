@@ -45,7 +45,7 @@ dag = DAG(
 # )
 
 collect_end_of_day_prices = PythonOperator(
-    task_id="collect_peers",
+    task_id="collect_end_of_day_prices",
     python_callable=stocks.collect_end_of_day_prices,
     op_kwargs={"ds": " {{ ds_nodash }} "},
     dag=dag,
