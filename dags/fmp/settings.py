@@ -25,6 +25,7 @@ delisted_companies = DL_DIR + "/fmp/delisted-companies/latest.parquet"
 ## Historical price
 buffer_historical_daily_price_full = DL_DIR + "/buffer/fmp/historical-daily-price-full"
 historical_daily_price_full = DL_DIR + "/fmp/historical-daily-price-full"
+historical_daily_price_full_raw = DL_DIR + "/fmp/historical-daily-price-full-raw"
 historical_ticker_price_full = DL_DIR + "/fmp/historical-ticker-price-full"
 ## Historical price minute
 buffer_historical_thirty_minute_price = (

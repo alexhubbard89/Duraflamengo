@@ -31,16 +31,29 @@ dag = DAG(
     schedule_interval="00 2 * * *",  ## 2:00am Daily
 )
 
-collect_all_full_price = SparkSubmitOperator(
-    task_id="collect_all_full_price",
-    application=f"{pyspark_app_home}/dags/fmp/runner/price.py",
+## fmp does not like this collection method
+# collect_all_full_price = SparkSubmitOperator(
+#     task_id="collect_all_full_price",
+#     application=f"{pyspark_app_home}/dags/fmp/runner/price.py",
+#     executor_memory="15g",
+#     driver_memory="15g",
+#     name="{{ task_instance.task_id }}",
+#     execution_timeout=timedelta(minutes=10),
+#     conf={"master": "spark://localhost:7077"},
+#     dag=dag,
+#     env_vars={"collect_full_price_ds": " {{ ts_nodash_with_tz }} "},
+# )
+
+distribute_append_price = SparkSubmitOperator(
+    task_id="distribute_append_price",
+    application=f"{pyspark_app_home}/dags/fmp/runner/distribute_append_price.py",
     executor_memory="15g",
     driver_memory="15g",
     name="{{ task_instance.task_id }}",
     execution_timeout=timedelta(minutes=10),
     conf={"master": "spark://localhost:7077"},
     dag=dag,
-    env_vars={"collect_full_price_ds": " {{ ts_nodash_with_tz }} "},
+    env_vars={"ds": " {{ ds_nodash }} "},
 )
 
 collect_peers = PythonOperator(
@@ -351,7 +364,7 @@ attach_metrics = PythonOperator(
 )
 
 [
-    collect_all_full_price >> full_gardening >> attach_metrics,
+    distribute_append_price >> full_gardening >> attach_metrics,
     collect_peers,
     collect_dcf,
     collect_rating,

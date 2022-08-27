@@ -1,6 +1,7 @@
 import pandas as pd
 import datetime as dt
 import fmp.gardening as gardening
+from fmp import stocks
 import derived_metrics.stock_prices as pv
 import fmp.settings as fmp_s
 import common.utils as utils
@@ -46,19 +47,11 @@ if __name__ == "__main__":
             daily_counts_df.loc[daily_counts_df["count"] < 100, "date"].tolist()
         )
     ]
-    ## flatten stream for missing dates
-    # set base parameters to slice where date is eqaul to {DS}
-    params_base = {"column": "date", "evaluation": "equal"}
+    ## Collect missing day
+    # append prices to daily files
     for ds in missing_dates:
-        # Set date param
-        params = params_base.copy()
-        params["slice"] = ds
-        gardening.make_daily_stream(
-            ds,
-            fmp_s.historical_ticker_price_full,
-            fmp_s.historical_daily_price_full,
-            params,
-        )
+        stocks.collect_end_of_day_prices(ds, yesterday=False)
+        stocks.distribute_append_price(ds, yesterday=False)
     ## Make price volume average for missing dates
     for ds in missing_dates:
         pv.make_pv(ds)

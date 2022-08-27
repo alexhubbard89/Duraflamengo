@@ -39,7 +39,13 @@ def load_calls_discover_data(ds: dt.date) -> pd.DataFrame:
     return pd.DataFrame(r.json())
 
 
-def read_option_contract(ds: dt.date, ticker: str, option_type: str) -> pd.DataFrame:
+def read_option_contract(
+    ds: dt.date,
+    ticker: str,
+    option_type: str,
+    calls_discovery_df: pd.DataFrame,
+    puts_discovery_df: pd.DataFrame,
+) -> pd.DataFrame:
     """
     Read in option contracts for a given ticker, on a given day,
     and for a given contract type.
@@ -180,7 +186,9 @@ def discovery_pipeline(ds: dt.date):
         ## complete analysis for all tickers
         for ticker in ticker_list:
             ## analysis here
-            df = read_option_contract(ds, ticker, option_type)
+            df = read_option_contract(
+                ds, ticker, option_type, calls_discovery_df, puts_discovery_df
+            )
             if len(df) == 0:
                 continue  ## no data
             df_liquidity = check_liquidity(df)

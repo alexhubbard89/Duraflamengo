@@ -453,3 +453,13 @@ def strbool(str_: str):
     if type(str_) == str:
         str_ = strtobool(str_)
     return str_
+
+
+def mk_dir(directory: str):
+    """
+    Check if directory exists. If not, then make.
+
+    Input: Directory location.
+    """
+    if not os.path.isdir(directory):
+        os.mkdir(directory)

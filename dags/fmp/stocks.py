@@ -1,9 +1,4 @@
-## spark
-from pyspark.sql import SparkSession
-from pyspark import SparkContext, SparkConf
-
 import common.generic as generic
-from typing import Callable
 import pandas as pd
 import datetime as dt
 import requests
@@ -11,11 +6,12 @@ import os
 import fmp.settings as s
 import common.utils as utils
 from io import StringIO
+from pyspark.sql import SparkSession
 
 FMP_KEY = os.environ["FMP_KEY"]
 
 
-def collect_full_price(ds: dt.date, ticker: str):
+def collect_full_price(ds: dt.date, ticker: str, buffer: bool = True):
     """
     Collect full price for a ticker and save to data-lake.
     Save the full file to easily query all info for a ticker.
@@ -37,9 +33,11 @@ def collect_full_price(ds: dt.date, ticker: str):
     df_typed = utils.format_data(df, s.price_full_types)
     df_typed_end = df_typed.loc[df_typed["date"] == ds].copy()
     ## save
-    df_typed_end.to_parquet(
-        s.buffer_historical_daily_price_full + f"/{ds}/{ticker}.parquet", index=False
-    )
+    if buffer:
+        df_typed_end.to_parquet(
+            s.buffer_historical_daily_price_full + f"/{ds}/{ticker}.parquet",
+            index=False,
+        )
     df_typed.to_parquet(
         s.historical_ticker_price_full + f"/{ticker}.parquet", index=False
     )
@@ -526,3 +524,102 @@ def collect_press_releases(ds: dt.date, yesterday: bool = True):
         spark_app="daily-press-releases-collection",
         **config_,
     )
+
+
+def collect_end_of_day_prices(ds: dt.date, yesterday: bool = True):
+    """
+    - Read full stream and write to data lake.
+        - historical_daily_price_full_raw
+    - Subset stream by the tickers found in the daily "to-collect" file.
+    - Write subset.
+        - historical_daily_price_full
+    """
+
+    ## Define shit
+    url = f"https://financialmodelingprep.com/api/v4/batch-request-end-of-day-prices?date={ds}&apikey={FMP_KEY}"
+
+    # locations
+    raw_dir = f"{s.historical_daily_price_full_raw}/{ds}/"
+    subset_dir = f"{s.historical_daily_price_full}/{ds}/"
+    raw_fn = f"{raw_dir}/data.parquet"
+    subset_fn = f"{subset_dir}/data.parquet"
+
+    ## Make request and unpack
+    r = requests.get(url)
+    data = [
+        z[0].split(",")
+        for z in [
+            y.split("\t") for y in [x for x in r.content.decode("utf-8").split("\r\n")]
+        ]
+    ]
+    df_raw = pd.DataFrame(data[1:], columns=data[0])
+
+    ## Read "to-collect" list
+    to_collect = pd.read_parquet(f"{s.to_collect}/{ds}.parquet")
+
+    ## Subset
+    df_subset = df_raw.loc[df_raw["symbol"].isin(to_collect["symbol"])]
+
+    ## Write data
+    # Make location
+    utils.mk_dir(raw_dir)
+    utils.mk_dir(subset_dir)
+    df_raw.to_parquet(raw_fn)
+    df_subset.to_parquet(subset_fn)
+
+
+def append_price(ticker: str, new_data: pd.DataFrame):
+    """
+    Open historical ticker price file,
+    append new data, and deduplicate.
+
+    Input: Ticker to append.
+    """
+    ticker_fn = f"{s.historical_ticker_price_full}/{ticker}.parquet"
+    if os.path.exists(ticker_fn):
+        new_data = (
+            pd.read_parquet(ticker_fn)
+            .append(new_data)
+            .drop_duplicates(["symbol", "date"])
+            .sort_values("date", ascending=False)
+        )
+    new_data.to_parquet(ticker_fn, index=True)
+
+
+def distribute_append_price(ds: dt.date, yesterday: bool = True):
+    """
+    Read daily prices of tickers I'm monitoring.
+    Prep the dataframe to distribute through spark.
+    Append daily price to full ticker price history
+    and deduplicate.
+
+    Input: Date to deconstruct stream.
+    """
+    ds = pd.to_datetime(ds).date()
+    if utils.strbool(yesterday):
+        ds = ds - dt.timedelta(1)
+    ## prep list to distribute through append function
+    # add missing columns to record schema evolution
+    subset_dir = f"{s.historical_daily_price_full}/{ds}/"
+    subset_fn = f"{subset_dir}/data.parquet"
+    df_distribute = pd.read_parquet(subset_fn)
+    for c in set(s.price_full_types.keys()) - set(df_distribute.columns):
+        df_distribute[c] = None
+    df_distribute = utils.format_data(df_distribute, s.price_full_types)
+
+    cols = df_distribute.columns.to_list()
+    distribute_list = [
+        {"ticker": x[0], "new_data": pd.DataFrame([x[1]], columns=cols)}
+        for x in zip(
+            df_distribute["symbol"].tolist(), df_distribute[cols].values.tolist()
+        )
+    ]
+
+    ## distribute append
+    spark = SparkSession.builder.appName(
+        f"pivot-daily-price-to-ticker-{ds}"
+    ).getOrCreate()
+    sc = spark.sparkContext
+    sc.parallelize(distribute_list).map(lambda r: append_price(**r)).collect()
+    sc.stop()
+    spark.stop()
