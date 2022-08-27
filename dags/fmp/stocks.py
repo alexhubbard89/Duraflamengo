@@ -534,7 +534,9 @@ def collect_end_of_day_prices(ds: dt.date, yesterday: bool = True):
     - Write subset.
         - historical_daily_price_full
     """
-
+    ds = pd.to_datetime(ds).date()
+    if utils.strbool(yesterday):
+        ds = ds - dt.timedelta(1)
     ## Define shit
     url = f"https://financialmodelingprep.com/api/v4/batch-request-end-of-day-prices?date={ds}&apikey={FMP_KEY}"
 

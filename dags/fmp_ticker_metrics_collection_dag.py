@@ -44,6 +44,14 @@ dag = DAG(
 #     env_vars={"collect_full_price_ds": " {{ ts_nodash_with_tz }} "},
 # )
 
+collect_end_of_day_prices = PythonOperator(
+    task_id="collect_peers",
+    python_callable=stocks.collect_end_of_day_prices,
+    op_kwargs={"ds": " {{ ds_nodash }} "},
+    dag=dag,
+    execution_timeout=timedelta(minutes=10),
+)
+
 distribute_append_price = SparkSubmitOperator(
     task_id="distribute_append_price",
     application=f"{pyspark_app_home}/dags/fmp/runner/distribute_append_price.py",
@@ -364,7 +372,10 @@ attach_metrics = PythonOperator(
 )
 
 [
-    distribute_append_price >> full_gardening >> attach_metrics,
+    collect_end_of_day_prices
+    >> distribute_append_price
+    >> full_gardening
+    >> attach_metrics,
     collect_peers,
     collect_dcf,
     collect_rating,
