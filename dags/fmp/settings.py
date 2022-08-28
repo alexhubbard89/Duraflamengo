@@ -530,6 +530,17 @@ thirty_minute_price_types = {
     "symbol": str,
 }
 
+eod_price_types = {
+    "symbol": str,
+    "date": dt.date,
+    "open": float,
+    "low": float,
+    "high": float,
+    "close": float,
+    "adjClose": float,
+    "volume": float,
+}
+
 dcf_types = {"symbol": str, "date": dt.date, "dcf": float}
 
 rating_types = {

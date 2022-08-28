@@ -8,50 +8,7 @@ import pyspark.sql.types as T
 
 ## Local code
 import common.utils as utils
-import derived_metrics.settings as s
-
-
-def prepare_pv() -> bool:
-    """
-    Use spark to read and filter needed data.
-    Write to buffer.
-
-    Since the data lake is so large I'm hitting
-    memory issues. This process finds the dates
-    necessary for analysis, copies the contents
-    to a buffer, prepares the data, then clears
-    the migrated buffer.
-
-    Inputs:
-        - Date is the last day of the analysis
-        - Days is the lookback window
-    """
-    ## load and migrate all data
-    spark = SparkSession.builder.appName("prepare-price-vol-avg").getOrCreate()
-    schema = T.StructType(
-        [
-            T.StructField("open", T.FloatType(), True),
-            T.StructField("high", T.FloatType(), True),
-            T.StructField("low", T.FloatType(), True),
-            T.StructField("close", T.FloatType(), True),
-            T.StructField("volume", T.IntegerType(), True),
-            T.StructField("date", T.DateType(), True),
-            T.StructField("ticker", T.StringType(), True),
-        ]
-    )
-    price_df = (
-        spark.read.format("orc")
-        .option("path", s.stock_avg_buffer + "/raw/*")
-        .schema(schema)
-        .load()
-        .orderBy(["ticker", "date"])
-        .repartition(1)  ## do not partition
-        .write.format("csv")
-        .mode("overwrite")
-        .save(s.stock_avg_buffer + "/prepared/", header=True)
-    )
-    _ = spark.stop()
-    return True
+import derived_metrics.settings as der_s
 
 
 def make_pv(ds: dt.date, yesterday: bool = True) -> bool:
@@ -67,19 +24,19 @@ def make_pv(ds: dt.date, yesterday: bool = True) -> bool:
         ds = ds - dt.timedelta(1)
     ## move the files to the buffer
     op_kwargs = {
-        "data_loc": s.price_dir,
+        "data_loc": der_s.price_dir,
         "date": ds,
         "days": 400,
-        "buffer_loc": s.stock_avg_buffer + "/raw",
+        "buffer_loc": der_s.stock_avg_buffer + "/raw",
     }
     utils.move_files(**op_kwargs)
     ## bulk load all parquet from buffer and clear buffer
     ## reading all at once causes an error, hence the loop.
     dfs = []
-    for fn in glob.glob(s.stock_avg_buffer + "/raw/*"):
+    for fn in glob.glob(der_s.stock_avg_buffer + "/raw/*"):
         dfs.append(pd.read_parquet(fn))
     price_df = pd.concat(dfs, ignore_index=True)
-    utils.clear_buffer((s.stock_avg_buffer + "/raw").split("data/buffer/")[1])
+    utils.clear_buffer((der_s.stock_avg_buffer + "/raw").split("data/buffer/")[1])
     date_base = pd.DataFrame(
         [
             x.date()
@@ -170,7 +127,7 @@ def make_pv(ds: dt.date, yesterday: bool = True) -> bool:
     ## subset to analysis date
     price_df_subset = price_df_full.loc[price_df_full["date"] == ds]
     if len(price_df_subset) > 0:
-        fn = f"{s.avg_price}/{ds}.parquet"
+        fn = f"{der_s.avg_price}/{ds}.parquet"
         price_df_subset.to_parquet(fn, index=False)
     return True
 
@@ -181,12 +138,12 @@ def migrate_pv():
     Use file name as partition.
     """
     ## subset
-    file_list = glob.glob(s.stock_avg_buffer + "/finished/" + "*.csv")
+    file_list = glob.glob(der_s.stock_avg_buffer + "/finished/" + "*.csv")
     if len(file_list) == 0:
         return False
-    price_df = utils.read_many_csv(s.stock_avg_buffer + "/finished/")
+    price_df = utils.read_many_csv(der_s.stock_avg_buffer + "/finished/")
     date = pd.to_datetime(
-        glob.glob(s.stock_avg_buffer + "/finished/*.csv")[0]
+        glob.glob(der_s.stock_avg_buffer + "/finished/*.csv")[0]
         .split("/")[-1]
         .split("T")[0]
         .split(".csv")[0]
@@ -197,7 +154,7 @@ def migrate_pv():
     ## migrate
     ## start spark session
     spark = SparkSession.builder.appName("migrate-price-vol-avg").getOrCreate()
-    sub_dir = s.avg_price.split("/data/")[1]
+    sub_dir = der_s.avg_price.split("/data/")[1]
     utils.write_spark(spark, price_df, sub_dir, date)
     spark.stop()
     return True

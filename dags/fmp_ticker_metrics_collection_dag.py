@@ -61,7 +61,7 @@ distribute_append_price = SparkSubmitOperator(
     execution_timeout=timedelta(minutes=10),
     conf={"master": "spark://localhost:7077"},
     dag=dag,
-    env_vars={"ds": " {{ ds_nodash }} "},
+    env_vars={"ds": " {{ ds_nodash }} ", "yesterday": "True"},
 )
 
 collect_peers = PythonOperator(
@@ -135,17 +135,17 @@ collect_grade = SparkSubmitOperator(
     env_vars={"collect_grade_ds": " {{ ts_nodash_with_tz }} "},
 )
 
-collect_sentiment = SparkSubmitOperator(
-    task_id="collect_sentiment",
-    application=f"{pyspark_app_home}/dags/fmp/runner/collect_sentiment.py",
-    executor_memory="15g",
-    driver_memory="15g",
-    name="{{ task_instance.task_id }}",
-    execution_timeout=timedelta(minutes=10),
-    conf={"master": "spark://localhost:7077"},
-    dag=dag,
-    env_vars={"collect_sentiment_ds": " {{ ts_nodash_with_tz }} "},
-)
+# collect_sentiment = SparkSubmitOperator(
+#     task_id="collect_sentiment",
+#     application=f"{pyspark_app_home}/dags/fmp/runner/collect_sentiment.py",
+#     executor_memory="15g",
+#     driver_memory="15g",
+#     name="{{ task_instance.task_id }}",
+#     execution_timeout=timedelta(minutes=10),
+#     conf={"master": "spark://localhost:7077"},
+#     dag=dag,
+#     env_vars={"collect_sentiment_ds": " {{ ts_nodash_with_tz }} "},
+# )
 
 collect_analyst_estimates = SparkSubmitOperator(
     task_id="collect_analyst_estimates",
@@ -303,17 +303,17 @@ collect_earnings_surprises = SparkSubmitOperator(
     env_vars={"collect_earnings_surprises_ds": " {{ ts_nodash_with_tz }} "},
 )
 
-collect_insider_trading = SparkSubmitOperator(
-    task_id="collect_insider_trading",
-    application=f"{pyspark_app_home}/dags/fmp/runner/collect_insider_trading.py",
-    executor_memory="15g",
-    driver_memory="15g",
-    name="{{ task_instance.task_id }}",
-    execution_timeout=timedelta(minutes=10),
-    conf={"master": "spark://localhost:7077"},
-    dag=dag,
-    env_vars={"collect_insider_trading_ds": " {{ ts_nodash_with_tz }} "},
-)
+# collect_insider_trading = SparkSubmitOperator(
+#     task_id="collect_insider_trading",
+#     application=f"{pyspark_app_home}/dags/fmp/runner/collect_insider_trading.py",
+#     executor_memory="15g",
+#     driver_memory="15g",
+#     name="{{ task_instance.task_id }}",
+#     execution_timeout=timedelta(minutes=10),
+#     conf={"master": "spark://localhost:7077"},
+#     dag=dag,
+#     env_vars={"collect_insider_trading_ds": " {{ ts_nodash_with_tz }} "},
+# )
 
 collect_stock_news = SparkSubmitOperator(
     task_id="collect_stock_news",
@@ -339,17 +339,17 @@ collect_press_releases = SparkSubmitOperator(
     env_vars={"collect_press_releases_ds": " {{ ts_nodash_with_tz }} "},
 )
 
-collect_company_profile = SparkSubmitOperator(
-    task_id="collect_company_profile",
-    application=f"{pyspark_app_home}/dags/fmp/runner/collect_company_profile.py",
-    executor_memory="15g",
-    driver_memory="15g",
-    name="{{ task_instance.task_id }}",
-    execution_timeout=timedelta(minutes=10),
-    conf={"master": "spark://localhost:7077"},
-    dag=dag,
-    env_vars={"collect_company_profile_ds": " {{ ts_nodash_with_tz }} "},
-)
+# collect_company_profile = SparkSubmitOperator(
+#     task_id="collect_company_profile",
+#     application=f"{pyspark_app_home}/dags/fmp/runner/collect_company_profile.py",
+#     executor_memory="15g",
+#     driver_memory="15g",
+#     name="{{ task_instance.task_id }}",
+#     execution_timeout=timedelta(minutes=10),
+#     conf={"master": "spark://localhost:7077"},
+#     dag=dag,
+#     env_vars={"collect_company_profile_ds": " {{ ts_nodash_with_tz }} "},
+# )
 
 full_gardening = SparkSubmitOperator(
     task_id="full_gardening",
@@ -382,7 +382,7 @@ attach_metrics = PythonOperator(
     collect_enterprise_values_annual,
     collect_enterprise_values_quarter,
     collect_grade,
-    collect_sentiment,
+    # collect_sentiment,
     collect_analyst_estimates,
     collect_analyst_estimates_quarter,
     collect_balance_sheets,
@@ -395,8 +395,8 @@ attach_metrics = PythonOperator(
     collect_ratios,
     collect_ratios_quarter,
     collect_earnings_surprises,
-    collect_insider_trading,
+    # collect_insider_trading,
     collect_stock_news,
     collect_press_releases,
-    collect_company_profile,
+    # collect_company_profile,
 ]

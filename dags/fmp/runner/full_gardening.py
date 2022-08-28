@@ -54,4 +54,4 @@ if __name__ == "__main__":
         stocks.distribute_append_price(ds, yesterday=False)
     ## Make price volume average for missing dates
     for ds in missing_dates:
-        pv.make_pv(ds)
+        pv.make_pv(ds, yesterday=False)

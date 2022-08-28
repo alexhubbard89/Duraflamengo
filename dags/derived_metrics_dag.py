@@ -91,6 +91,18 @@ make_daily_sector_rating = SparkSubmitOperator(
     env_vars={"ds": " {{ ts_nodash_with_tz }} "},
 )
 
+make_support_resistance = SparkSubmitOperator(
+    task_id="make_support_resistance",
+    application=f"{pyspark_app_home}/dags/derived_metrics/runner/make_support_resistance.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="{{ task_instance.task_id }}",
+    execution_timeout=timedelta(minutes=10),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+    env_vars={"ds": " {{ ds_nodash }} ", "yesterday": "True"},
+)
+
 ## DAG Order
 [
     make_business_health,
@@ -98,4 +110,5 @@ make_daily_sector_rating = SparkSubmitOperator(
     make_ratios,
     make_daily_industry_rating,
     make_daily_sector_rating,
+    make_support_resistance,
 ]

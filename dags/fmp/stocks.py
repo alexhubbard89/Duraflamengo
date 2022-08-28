@@ -555,6 +555,7 @@ def collect_end_of_day_prices(ds: dt.date, yesterday: bool = True):
         ]
     ]
     df_raw = pd.DataFrame(data[1:], columns=data[0])
+    df_raw = utils.format_data(df_raw, s.eod_price_types)
 
     ## Read "to-collect" list
     to_collect = pd.read_parquet(f"{s.to_collect}/{ds}.parquet")

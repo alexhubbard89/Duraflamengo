@@ -53,6 +53,19 @@ def clear_buffer(subdir):
     return True
 
 
+def clear_directory(path: str):
+    """
+    Empty directory and recreate.
+
+    Input: Path to empty
+    """
+    try:
+        shutil.rmtree(path)
+        os.mkdir(path)
+    except Exception as e:
+        pass
+
+
 def format_buffer(ds: dt.date, buffer_dir: str, yesterday: bool):
     """
     Clear buffer and make folder name the date

@@ -15,6 +15,9 @@ industry_rating = DL_DIR + "/derived-measurements/industry-rating"
 sector_rating = DL_DIR + "/derived-measurements/sector-rating"
 ## other
 asset_metrics = DL_DIR + "/derived-measurements/asset-metrics"
+## technicals
+sr_levels = DL_DIR + "/derived-measurements/support-resistance/data"
+sr_graphs = DL_DIR + "/derived-measurements/support-resistance/graph"
 
 
 ## Data types
@@ -112,6 +115,15 @@ asset_metrics_types = {
     "srv_compare": float,
     "slrv_compare": float,
     "growth_rate": float,
+}
+
+support_resistance_types = {
+    "symbol": str,
+    "date": dt.date,
+    "support": float,
+    "resistance": float,
+    "close_avg_5": float,
+    "close_avg_13": float,
 }
 
 ## maps
