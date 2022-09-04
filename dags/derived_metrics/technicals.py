@@ -1,9 +1,7 @@
 from re import I
 import pandas as pd
 import datetime as dt
-import glob
 from pyspark.sql import SparkSession
-import pyspark.sql.types as T
 import common.utils as utils
 import derived_metrics.settings as der_s
 import fmp.settings as fmp_s
@@ -43,8 +41,8 @@ def is_resistance(df: pd.DataFrame, index: int, window: int = 4) -> bool:
 
     conditions = []
     for i in range(window):
-        conditions.append(df["high"][index] >= df["high"][index + i])
-        conditions.append(df["high"][index] >= df["high"][index - i])
+        conditions.append(df.loc[index, "high"] >= df.loc[index + i, "high"])
+        conditions.append(df.loc[index, "high"] >= df.loc[index - i, "high"])
     return (sum(conditions) / len(conditions)) == 1
 
 
@@ -89,9 +87,7 @@ def find_support_resistance(ticker, lookback=90, sr_window=4, level_len=180):
     df["close_avg_13"] = df["close"].rolling(window=13).mean()
 
     ## format and write data
-    df_sr = df[
-        ["symbol", "date_og", "support", "resistance", "close_avg_5", "close_avg_13"]
-    ].rename(columns={"date_og": "date"})
+    df_sr = df.rename(columns={"date": "date_int", "date_og": "date"})
     df_sr = utils.format_data(df_sr, der_s.support_resistance_types)
     df_sr.to_parquet(write_data_fn, index=False)
 
@@ -138,8 +134,8 @@ def find_support_resistance(ticker, lookback=90, sr_window=4, level_len=180):
     ax.plot(df_subset["date"], df_subset["close_avg_13"], label="Rolling 13")
     ax.legend()
     ax.grid()
-    fig.show()
     plt.savefig(image_fn)
+    plt.close()
 
 
 def distribute_sr_creation(
@@ -147,7 +143,7 @@ def distribute_sr_creation(
     graph_lookback=90,
     sr_window=4,
     level_len=180,
-    v_threshold: int = 500000,
+    v_threshold: int = 1000000,
     p_threshold: int = 10,
     yesterday: bool = False,
 ):

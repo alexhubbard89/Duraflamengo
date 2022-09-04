@@ -35,25 +35,25 @@ dag = DAG(
     # on every day-of-week from Monday through Friday.”
 )
 
-collect_thirty_minute_price = SparkSubmitOperator(
-    task_id="collect_thirty_minute_price",
-    application=f"{pyspark_app_home}/dags/fmp/runner/thirty_minute_price.py",
-    executor_memory="15g",
-    driver_memory="15g",
-    name="{{ task_instance.task_id }}",
-    execution_timeout=timedelta(minutes=10),
-    conf={"master": "spark://localhost:7077"},
-    dag=dag,
-    env_vars={"collect_thirty_minute_price_ds": " {{ ts_nodash_with_tz }} "},
-)
+# collect_thirty_minute_price = SparkSubmitOperator(
+#     task_id="collect_thirty_minute_price",
+#     application=f"{pyspark_app_home}/dags/fmp/runner/thirty_minute_price.py",
+#     executor_memory="15g",
+#     driver_memory="15g",
+#     name="{{ task_instance.task_id }}",
+#     execution_timeout=timedelta(minutes=10),
+#     conf={"master": "spark://localhost:7077"},
+#     dag=dag,
+#     env_vars={"collect_thirty_minute_price_ds": " {{ ts_nodash_with_tz }} "},
+# )
 
-attach_metrics = PythonOperator(
-    task_id="attach_metrics",
-    python_callable=asset_metrics.attach_metrics,
-    op_kwargs={"ds": " {{ execution_date }} ", "window": 20, "yesterday": "False"},
-    dag=dag,
-    execution_timeout=timedelta(minutes=10),
-)
+# attach_metrics = PythonOperator(
+#     task_id="attach_metrics",
+#     python_callable=asset_metrics.attach_metrics,
+#     op_kwargs={"ds": " {{ execution_date }} ", "window": 20, "yesterday": "False"},
+#     dag=dag,
+#     execution_timeout=timedelta(minutes=10),
+# )
 
 options_discovery = PythonOperator(
     task_id="options_discovery",
@@ -75,18 +75,18 @@ distributed_options_collection = SparkSubmitOperator(
     env_vars={"distributed_options_collection_ds": " {{ execution_date }} "},
 )
 
-credit_spreads_discovery = PythonOperator(
-    task_id="credit_spreads_discovery",
-    python_callable=credit_spreads.discovery_pipeline,
-    op_kwargs={"ds": "{{ ds }}"},
-    dag=dag,
-    execution_timeout=timedelta(minutes=10),
-)
+# credit_spreads_discovery = PythonOperator(
+#     task_id="credit_spreads_discovery",
+#     python_callable=credit_spreads.discovery_pipeline,
+#     op_kwargs={"ds": "{{ ds }}"},
+#     dag=dag,
+#     execution_timeout=timedelta(minutes=10),
+# )
 
 [
-    collect_thirty_minute_price
-    >> attach_metrics
-    >> options_discovery
+    # collect_thirty_minute_price
+    # >> attach_metrics
+    options_discovery
     >> distributed_options_collection
-    >> credit_spreads_discovery
+    # >> credit_spreads_discovery
 ]

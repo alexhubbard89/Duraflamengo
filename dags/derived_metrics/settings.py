@@ -18,6 +18,10 @@ asset_metrics = DL_DIR + "/derived-measurements/asset-metrics"
 ## technicals
 sr_levels = DL_DIR + "/derived-measurements/support-resistance/data"
 sr_graphs = DL_DIR + "/derived-measurements/support-resistance/graph"
+## swing trades
+option_swings_simulations = DL_DIR + "/derived-measurements/option-swings/simulations/"
+option_swings = DL_DIR + "/derived-measurements/option-swings/discovery"
+option_swings_ml = DL_DIR + "/derived-measurements/option-swings/random-forest-output"
 
 
 ## Data types
@@ -120,7 +124,13 @@ asset_metrics_types = {
 support_resistance_types = {
     "symbol": str,
     "date": dt.date,
+    "open": float,
+    "close": float,
+    "low": float,
+    "high": float,
+    "volume": float,
     "support": float,
+    "date_int": float,
     "resistance": float,
     "close_avg_5": float,
     "close_avg_13": float,

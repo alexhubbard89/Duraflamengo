@@ -9,9 +9,9 @@ from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
 from airflow.models import Variable
 
 ## python scripts
-import common.utils as utils
 import derived_metrics.stock_prices as pv
 import derived_metrics.business_health as bh
+from fmp import macro_econ
 import derived_metrics.settings as s
 
 ## Set location variables
@@ -97,10 +97,41 @@ make_support_resistance = SparkSubmitOperator(
     executor_memory="15g",
     driver_memory="15g",
     name="{{ task_instance.task_id }}",
+    execution_timeout=timedelta(minutes=20),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+    env_vars={"ds": " {{ ds_nodash }} ", "yesterday": "True"},
+)
+
+option_swings_discovery = SparkSubmitOperator(
+    task_id="option_swings_discovery",
+    application=f"{pyspark_app_home}/dags/derived_metrics/runner/option_swings_discovery.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="{{ task_instance.task_id }}",
     execution_timeout=timedelta(minutes=10),
     conf={"master": "spark://localhost:7077"},
     dag=dag,
     env_vars={"ds": " {{ ds_nodash }} ", "yesterday": "True"},
+)
+
+option_swings_predict = SparkSubmitOperator(
+    task_id="option_swings_predict",
+    application=f"{pyspark_app_home}/dags/derived_metrics/runner/option_swings_predict.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="{{ task_instance.task_id }}",
+    execution_timeout=timedelta(minutes=10),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+    env_vars={"ds": " {{ ds_nodash }} ", "yesterday": "True"},
+)
+
+merge_macro_signals = PythonOperator(
+    task_id="merge_macro_signals",
+    python_callable=macro_econ.merge_signals,
+    dag=dag,
+    execution_timeout=timedelta(minutes=10),
 )
 
 ## DAG Order
@@ -110,5 +141,6 @@ make_support_resistance = SparkSubmitOperator(
     make_ratios,
     make_daily_industry_rating,
     make_daily_sector_rating,
-    make_support_resistance,
+    make_support_resistance >> option_swings_discovery >> option_swings_predict,
+    merge_macro_signals,
 ]

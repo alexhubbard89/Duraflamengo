@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 import common.utils as utils
 import tda.settings as tda_s
 import analysis.settings as analysis_s
+import derived_metrics.settings as der_s
 import os
 
 
@@ -43,8 +44,17 @@ def options(ticker: str):
                 ]
             )
         )
-    calls_df = pd.concat(calls_dfs, ignore_index=True)
-    calls_df["collected"] = dts
+    if len(calls_dfs) > 0:
+        ## unpack
+        calls_df = pd.concat(calls_dfs, ignore_index=True)
+        calls_df["collected"] = dts
+        ## append files
+        calls_fn = f"{tda_s.OPTIONS}/{ds}/{ticker}_calls.parquet"
+        calls_df.append(utils.read_protect_parquet(calls_fn))
+        ## format data
+        calls_df = utils.format_data(calls_df, tda_s.options_types)
+        ## write data
+        calls_df.to_parquet(calls_fn, index=False)
     ## extract puts
     puts_dfs = []
     put_dict = r.json()["putExpDateMap"]
@@ -57,19 +67,17 @@ def options(ticker: str):
                 ]
             )
         )
-    puts_df = pd.concat(puts_dfs, ignore_index=True)
-    puts_df["collected"] = dts
-    ## append files
-    calls_fn = f"{tda_s.OPTIONS}/{ds}/{ticker}_calls.parquet"
-    puts_fn = f"{tda_s.OPTIONS}/{ds}/{ticker}_puts.parquet"
-    calls_df.append(utils.read_protect_parquet(calls_fn))
-    puts_df.append(utils.read_protect_parquet(puts_fn))
-    ## format data
-    calls_df = utils.format_data(calls_df, tda_s.options_types)
-    puts_df = utils.format_data(puts_df, tda_s.options_types)
-    ## write data
-    calls_df.to_parquet(calls_fn, index=False)
-    puts_df.to_parquet(puts_fn, index=False)
+    if len(puts_dfs) > 0:
+        ## unpack
+        puts_df = pd.concat(puts_dfs, ignore_index=True)
+        puts_df["collected"] = dts
+        ## append files
+        puts_fn = f"{tda_s.OPTIONS}/{ds}/{ticker}_puts.parquet"
+        puts_df.append(utils.read_protect_parquet(puts_fn))
+        ## format data
+        puts_df = utils.format_data(puts_df, tda_s.options_types)
+        ## write data
+        puts_df.to_parquet(puts_fn, index=False)
     return ticker
 
 
@@ -84,30 +92,23 @@ def get_option_collection_list(ds: dt.date = None) -> list:
     I grab two dates for intraday and full metrics.
 
     Inputs:
-        - ds: Date of discory list.
+        - ds: Date of discovery list.
     Returns:
         - List to collect.
     """
     if ds == None:
         ds = dt.datetime.now().date()
-    while not os.path.isfile(analysis_s.calls_discovery_dir + f"/{ds}.parquet"):
+    while not os.path.isfile(f"{der_s.option_swings_ml}/{ds}/data.parquet"):
         ds = ds - dt.timedelta(1)
-    yesterday = ds - dt.timedelta(1)
-    while not os.path.isfile(analysis_s.calls_discovery_dir + f"/{yesterday}.parquet"):
-        yesterday = yesterday - dt.timedelta(1)
-    calls_df = pd.read_parquet(analysis_s.calls_discovery_dir + f"/{ds}.parquet")
-    puts_df = pd.read_parquet(analysis_s.puts_discovery_dir + f"/{ds}.parquet")
-    y_calls_df = pd.read_parquet(
-        analysis_s.calls_discovery_dir + f"/{yesterday}.parquet"
+    prior_day = ds - dt.timedelta(1)
+    while not os.path.isfile(f"{der_s.option_swings_ml}/{prior_day}/data.parquet"):
+        prior_day = prior_day - dt.timedelta(1)
+    discovery_df = pd.read_parquet(f"{der_s.option_swings_ml}/{ds}/data.parquet")
+    prior_discovery_df = pd.read_parquet(
+        f"{der_s.option_swings_ml}/{prior_day}/data.parquet"
     )
-    y_puts_df = pd.read_parquet(analysis_s.puts_discovery_dir + f"/{yesterday}.parquet")
     return list(
-        set(
-            calls_df["symbol"].tolist()
-            + puts_df["symbol"].tolist()
-            + y_calls_df["symbol"].tolist()
-            + y_puts_df["symbol"].tolist()
-        )
+        set(discovery_df["symbol"].tolist() + prior_discovery_df["symbol"].tolist())
     )
 
 
@@ -117,7 +118,7 @@ def distribute_options(ds: dt.date):
     Collect current options in spark.
 
     Inputs:
-        - ds: Date of discory list.
+        - ds: Date of discovery list.
     """
 
     path = f"{tda_s.OPTIONS}/{ds}"

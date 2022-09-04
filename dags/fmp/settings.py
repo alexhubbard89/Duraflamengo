@@ -168,6 +168,8 @@ ci_30_year_fixed_rate_mortgage_average = (
 ci_15_year_fixed_rate_mortgage_average = (
     economic_indicators + "/ci-15-year-fixed-rate-mortgage-average"
 )
+## Stitched together macro signals
+full_macro = DL_DIR + "/fmp/full-macro-signals"
 
 
 ## urls
