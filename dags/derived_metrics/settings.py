@@ -13,6 +13,8 @@ industry_ratios = DL_DIR + "/derived-measurements/industry-ratios"
 sector_ratios = DL_DIR + "/derived-measurements/sector-ratios"
 industry_rating = DL_DIR + "/derived-measurements/industry-rating"
 sector_rating = DL_DIR + "/derived-measurements/sector-rating"
+sector_ratio_scores = DL_DIR + "/derived-measurements/sector-ratio-scores"
+sector_ratio_scores_ticker = DL_DIR + "/derived-measurements/sector-ratio-scores-ticker"
 ## other
 asset_metrics = DL_DIR + "/derived-measurements/asset-metrics"
 ## technicals
@@ -22,6 +24,10 @@ sr_graphs = DL_DIR + "/derived-measurements/support-resistance/graph"
 option_swings_simulations = DL_DIR + "/derived-measurements/option-swings/simulations/"
 option_swings = DL_DIR + "/derived-measurements/option-swings/discovery"
 option_swings_ml = DL_DIR + "/derived-measurements/option-swings/random-forest-output"
+## seasonality map
+mbg_seasonality = DL_DIR + "/derived-measurements/modern-blk-girl/seasonality.parquet"
+## Ticker inputs for ML
+ml_ticker_signals = DL_DIR + "/derived-measurements/ml-signals/ticker-signals"
 
 
 ## Data types
@@ -134,6 +140,25 @@ support_resistance_types = {
     "resistance": float,
     "close_avg_5": float,
     "close_avg_13": float,
+    "close_avg_50": float,
+    "close_avg_200": float,
+    "avg_volume": float,
+    "range": float,
+    "avg_range": float,
+}
+
+sector_ratio_types = {
+    "date": dt.date,
+    "symbol": str,
+    "sector": str,
+    "eps": float,
+    "pe": float,
+    "ps": float,
+    "pb": float,
+    "eps_score": float,
+    "pe_score": float,
+    "ps_score": float,
+    "pb_score": float,
 }
 
 ## maps

@@ -192,7 +192,7 @@ def distribute_read_many_parquet(ds: dt.date, path: str, params: dict = None):
     to_collect_df = pd.read_parquet(fmp_s.to_collect + f"/{ds}.parquet")
     collection_list = to_collect_df["symbol"].values.tolist()
     distribution_list = [f"{path}/{ticker}.parquet" for ticker in collection_list]
-    spark = SparkSession.builder.appName("read-files").getOrCreate()
+    spark = SparkSession.builder.appName("read-files").getOrCreate().newSession()
     sc = spark.sparkContext
     dfs = (
         sc.parallelize(distribution_list)

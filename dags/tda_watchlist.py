@@ -1,6 +1,5 @@
 ## python
 import tda.functions as tda
-import os
 from datetime import datetime, timedelta
 import pendulum
 
@@ -38,4 +37,10 @@ update_watchlist = PythonOperator(
     dag=dag,
 )
 
-update_watchlist
+update_token = PythonOperator(
+    task_id="update_token",
+    python_callable=tda.get_new_tokens,
+    dag=dag,
+)
+
+update_watchlist, update_token

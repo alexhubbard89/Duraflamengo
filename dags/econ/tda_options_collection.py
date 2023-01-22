@@ -17,6 +17,7 @@ from pyspark import SparkContext, SparkConf
 
 ## Local code
 import common.utils as utils
+import tda.settings as tda_s
 
 sm_data_lake_dir = "/Users/alexanderhubbard/stock-market/data"
 SINGLE_WRITE_BUFFER = sm_data_lake_dir + "/buffer/tda-options/single/"
@@ -242,12 +243,15 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
     spark = SparkSession.builder.appName("daily-tda-price-collect").getOrCreate()
     sc_tda = spark.sparkContext
 
-    ## set collection variables
-    ticker_file = sm_data_lake_dir + "/seed-data/nasdaq_screener_1628807233734.csv"
-    ticker_df = pd.read_csv(ticker_file)
-    ## remove tickers with forward slash. They break stuff
-    ticker_df = ticker_df.loc[ticker_df["Symbol"].str.contains("/") == False]
-    all_ticker_list = ticker_df["Symbol"].tolist()
+    # ## set collection variables
+    # ticker_file = sm_data_lake_dir + "/seed-data/nasdaq_screener_1628807233734.csv"
+    # ticker_df = pd.read_csv(ticker_file)
+    # ## remove tickers with forward slash. They break stuff
+    # ticker_df = ticker_df.loc[ticker_df["Symbol"].str.contains("/") == False]
+    # all_ticker_list = ticker_df["Symbol"].tolist()
+
+    ## find tickers to collection options for
+    all_ticker_list = list(set(pd.read_parquet(tda_s.MY_WATCHLIST_LATEST)["symbol"]))
     collected_list = [
         x.split("/")[-1].split(".csv")[0] for x in glob.glob(TMP_WRITE_BUFFER + "*")
     ]

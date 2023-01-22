@@ -32,7 +32,7 @@ dag = DAG(
     dag_id="tda-minute-by-minute-price-collection",
     default_args=default_args,
     catchup=False,
-    schedule_interval="0 6 * * 7",
+    schedule_interval="0 6 * * *",
 )  ## sundays at 6am
 
 tda_minute_make_buffer = PythonOperator(

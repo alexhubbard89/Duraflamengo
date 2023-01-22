@@ -49,7 +49,7 @@ def is_resistance(df: pd.DataFrame, index: int, window: int = 4) -> bool:
 def find_support_resistance(ticker, lookback=90, sr_window=4, level_len=180):
     """
     Make support and resistance level for a given ticker.
-    Attach 5 and 13 day smooth moving averages (SMA) as close_avg.
+    Attach 5, 13, 50, 200 day smooth moving averages (SMA) as close_avg.
     Graph the last 90 days.
     Write dataset and graph to datalake.
 
@@ -85,6 +85,11 @@ def find_support_resistance(ticker, lookback=90, sr_window=4, level_len=180):
 
     df["close_avg_5"] = df["close"].rolling(window=5).mean()
     df["close_avg_13"] = df["close"].rolling(window=13).mean()
+    df["close_avg_50"] = df["close"].rolling(window=50).mean()
+    df["close_avg_200"] = df["close"].rolling(window=200).mean()
+    df["avg_volume"] = df["volume"].rolling(window=5).mean()
+    df["range"] = abs(df["open"] - df["close"])
+    df["avg_range"] = df["range"].rolling(window=25).median()
 
     ## format and write data
     df_sr = df.rename(columns={"date": "date_int", "date_og": "date"})
@@ -132,6 +137,8 @@ def find_support_resistance(ticker, lookback=90, sr_window=4, level_len=180):
     plt.title(f"{ticker}: Support Resistance")
     ax.plot(df_subset["date"], df_subset["close_avg_5"], label="Rolling 5")
     ax.plot(df_subset["date"], df_subset["close_avg_13"], label="Rolling 13")
+    ax.plot(df_subset["date"], df_subset["close_avg_50"], label="Rolling 50")
+    ax.plot(df_subset["date"], df_subset["close_avg_200"], label="Rolling 200")
     ax.legend()
     ax.grid()
     plt.savefig(image_fn)

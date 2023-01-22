@@ -1,4 +1,5 @@
 import pandas as pd
+import datetime as dt
 import fmp.settings as s
 import derived_metrics.settings as dm_s
 import common.utils as utils
@@ -8,9 +9,12 @@ from pyspark.sql import SparkSession
 
 if __name__ == "__main__":
     ds = pd.to_datetime(os.environ["ds"]).tz_convert("US/Eastern").date()
+    ## always work for yesterdays data, no price data for today
+    ds = ds - dt.timedelta(1)
     if os.path.isdir(f"{s.historical_rating}/{ds}/"):
-        ## get industry and sectory
+        ## get industry and sector
         company_profile_df = utils.read_many_parquet(s.company_profile_ticker + "/")
+        company_profile_df.loc[~company_profile_df["sector"].isin(["", "N/A"])]
         ## load ratings for the date
         spark = SparkSession.builder.appName("read-api").getOrCreate()
         df = (

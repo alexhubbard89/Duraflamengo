@@ -11,6 +11,7 @@ from airflow.models import Variable
 ## python scripts
 import derived_metrics.stock_prices as pv
 import derived_metrics.business_health as bh
+import derived_metrics.fundamentals as fundamentals
 from fmp import macro_econ
 import derived_metrics.settings as s
 
@@ -35,8 +36,8 @@ dag = DAG(
     dag_id="derived-metrics",
     default_args=default_args,
     catchup=False,
-    schedule_interval="30 */2 * * *"
-    ## At minute 30 past every 2nd hour.
+    schedule_interval="30 */4 * * *"
+    ## At minute 30 past every 4th hour.
 )
 
 make_pv = PythonOperator(
@@ -134,6 +135,38 @@ merge_macro_signals = PythonOperator(
     execution_timeout=timedelta(minutes=10),
 )
 
+make_sector_ratio_scores = PythonOperator(
+    task_id="make_sector_ratio_scores",
+    python_callable=fundamentals.make_sector_ratio_scores,
+    op_kwargs={"ds": "{{ ds }}", "yesterday": "True"},
+    dag=dag,
+    execution_timeout=timedelta(minutes=10),
+)
+
+append_ratio_scores = SparkSubmitOperator(
+    task_id="append_ratio_scores",
+    application=f"{pyspark_app_home}/dags/derived_metrics/runner/append_ratio_scores.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="{{ task_instance.task_id }}",
+    execution_timeout=timedelta(minutes=10),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+    env_vars={"ds": " {{ ds_nodash }} ", "yesterday": "True"},
+)
+
+ml_join_ticker_signals = SparkSubmitOperator(
+    task_id="ml_join_ticker_signals",
+    application=f"{pyspark_app_home}/dags/derived_metrics/runner/join_ticker_signals.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="{{ task_instance.task_id }}",
+    execution_timeout=timedelta(minutes=10),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+    env_vars={"ds": " {{ ds_nodash }} "},
+)
+
 ## DAG Order
 [
     make_business_health,
@@ -143,4 +176,9 @@ merge_macro_signals = PythonOperator(
     make_daily_sector_rating,
     make_support_resistance >> option_swings_discovery >> option_swings_predict,
     merge_macro_signals,
+    make_ratios >> make_sector_ratio_scores,
+    make_daily_industry_rating >> make_sector_ratio_scores,
+    make_daily_sector_rating >> make_sector_ratio_scores,
+    make_sector_ratio_scores >> append_ratio_scores,
+    append_ratio_scores >> ml_join_ticker_signals,
 ]
