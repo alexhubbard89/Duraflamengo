@@ -161,6 +161,8 @@ def collect_generic_distributed(
         collection_list = get_distribution_list(buffer_loc)
     elif get_distribution_list == tda.get_option_collection_list:
         collection_list = get_distribution_list(ds)
+    elif get_distribution_list == utils.get_watchlist:
+        collection_list = get_distribution_list(ds)
     while len(collection_list) > 0:
         distribution_list = [
             utils.make_input("ticker", t, kwargs) for t in collection_list

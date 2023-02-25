@@ -10,6 +10,8 @@ DL_DIR = os.environ["DL_DIR"]
 MY_WATCHLIST = DL_DIR + "/watchlist/alex"
 MY_WATCHLIST_LATEST = MY_WATCHLIST + "/latest.parquet"
 OPTIONS = DL_DIR + "/tda/options"
+OPTIONS_SINGLE = DL_DIR + "/tda-options-single"
+OPTIONS_ANALYTICAL = DL_DIR + "/tda-options-analytical"
 
 ## urls
 TDA = "https://api.tdameritrade.com/v1"

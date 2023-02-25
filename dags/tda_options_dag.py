@@ -45,12 +45,12 @@ clear_single_buffer = PythonOperator(
     dag=dag,
 )
 
-# clear_analytical_buffer = PythonOperator(
-#     task_id='clear_analytical_buffer' ,
-#     python_callable=options.clear_buffer,
-#     op_kwargs={'strategy': 'analytical'},
-#     dag=dag,
-# )
+clear_analytical_buffer = PythonOperator(
+    task_id="clear_analytical_buffer",
+    python_callable=options.clear_buffer,
+    op_kwargs={"strategy": "analytical"},
+    dag=dag,
+)
 
 ## collect and migrate single options
 single_collection = SparkSubmitOperator(
@@ -75,27 +75,30 @@ single_migration = SparkSubmitOperator(
     dag=dag,
 )
 
-# ## collect and migrate analytical options
-# analytical_collection = SparkSubmitOperator(
-#     task_id='analytical_collection',
-#     application=f'{pyspark_app_home}/dags/econ/runner/collect_tda_options_analytical.py',
-#     executor_memory='15g',
-#     driver_memory='15g',
-#     name='analytical_collection',
-#     execution_timeout=timedelta(minutes=150),
-#     conf={'master':'spark://localhost:7077'},
-#     dag=dag
-# )
+## collect and migrate analytical options
+analytical_collection = SparkSubmitOperator(
+    task_id="analytical_collection",
+    application=f"{pyspark_app_home}/dags/econ/runner/collect_tda_options_analytical.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="analytical_collection",
+    execution_timeout=timedelta(minutes=150),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+)
 
-# analytical_migration = SparkSubmitOperator(
-#     task_id='analytical_migration',
-#     application=f'{pyspark_app_home}/dags/econ/runner/migrate_tda_options_analytical.py',
-#     executor_memory='15g',
-#     driver_memory='15g',
-#     name='analytical_migration',
-#     execution_timeout=timedelta(minutes=150),
-#     conf={'master':'spark://localhost:7077'},
-#     dag=dag
-# )
+analytical_migration = SparkSubmitOperator(
+    task_id="analytical_migration",
+    application=f"{pyspark_app_home}/dags/econ/runner/migrate_tda_options_analytical.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="analytical_migration",
+    execution_timeout=timedelta(minutes=150),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+)
 
-[clear_single_buffer >> single_collection >> single_migration]
+[
+    clear_single_buffer >> single_collection >> single_migration,
+    clear_analytical_buffer >> analytical_collection >> analytical_migration,
+]

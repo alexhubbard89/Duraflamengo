@@ -1,5 +1,6 @@
 import datetime as dt
 import os
+import talib
 
 ## paths
 DL_DIR = os.environ["DL_DIR"]
@@ -28,7 +29,13 @@ option_swings_ml = DL_DIR + "/derived-measurements/option-swings/random-forest-o
 mbg_seasonality = DL_DIR + "/derived-measurements/modern-blk-girl/seasonality.parquet"
 ## Ticker inputs for ML
 ml_ticker_signals = DL_DIR + "/derived-measurements/ml-signals/ticker-signals"
-
+price_consolidation_sparse = (
+    f"{DL_DIR}/derived-measurements/price-consolidation/sparse-matrix"
+)
+price_consolidation_heatmap = (
+    f"{DL_DIR}/derived-measurements/price-consolidation/heatmap"
+)
+candlestick_graph_prep = f"{DL_DIR}/derived-measurements/candlestick-graph-prep"
 
 ## Data types
 ratio_types = {
@@ -179,3 +186,94 @@ rating_map = {
     "D": 4,
     "D-": 2,
 }
+
+## Candlestick pattern stuff
+ticker_methods = {
+    "CDL2CROWS": talib.CDL2CROWS,
+    "CDL3BLACKCROWS": talib.CDL3BLACKCROWS,
+    "CDL3INSIDE": talib.CDL3INSIDE,
+    "CDL3LINESTRIKE": talib.CDL3LINESTRIKE,
+    "CDL3OUTSIDE": talib.CDL3OUTSIDE,
+    "CDL3STARSINSOUTH": talib.CDL3STARSINSOUTH,
+    "CDL3WHITESOLDIERS": talib.CDL3WHITESOLDIERS,
+    "CDLABANDONEDBABY": talib.CDLABANDONEDBABY,
+    "CDLADVANCEBLOCK": talib.CDLADVANCEBLOCK,
+    "CDLBELTHOLD": talib.CDLBELTHOLD,
+    "CDLBREAKAWAY": talib.CDLBREAKAWAY,
+    "CDLCLOSINGMARUBOZU": talib.CDLCLOSINGMARUBOZU,
+    "CDLCONCEALBABYSWALL": talib.CDLCONCEALBABYSWALL,
+    "CDLCOUNTERATTACK": talib.CDLCOUNTERATTACK,
+    "CDLDARKCLOUDCOVER": talib.CDLDARKCLOUDCOVER,
+    "CDLDOJI": talib.CDLDOJI,
+    "CDLDOJISTAR": talib.CDLDOJISTAR,
+    "CDLDRAGONFLYDOJI": talib.CDLDRAGONFLYDOJI,
+    "CDLENGULFING": talib.CDLENGULFING,
+    "CDLEVENINGDOJISTAR": talib.CDLEVENINGDOJISTAR,
+    "CDLEVENINGSTAR": talib.CDLEVENINGSTAR,
+    "CDLGAPSIDESIDEWHITE": talib.CDLGAPSIDESIDEWHITE,
+    "CDLGRAVESTONEDOJI": talib.CDLGRAVESTONEDOJI,
+    "CDLHAMMER": talib.CDLHAMMER,
+    "CDLHANGINGMAN": talib.CDLHANGINGMAN,
+    "CDLHARAMI": talib.CDLHARAMI,
+    "CDLHARAMICROSS": talib.CDLHARAMICROSS,
+    "CDLHIGHWAVE": talib.CDLHIGHWAVE,
+    "CDLHIKKAKE": talib.CDLHIKKAKE,
+    "CDLHIKKAKEMOD": talib.CDLHIKKAKEMOD,
+    "CDLHOMINGPIGEON": talib.CDLHOMINGPIGEON,
+    "CDLIDENTICAL3CROWS": talib.CDLIDENTICAL3CROWS,
+    "CDLINNECK": talib.CDLINNECK,
+    "CDLINVERTEDHAMMER": talib.CDLINVERTEDHAMMER,
+    "CDLKICKING": talib.CDLKICKING,
+    "CDLKICKINGBYLENGTH": talib.CDLKICKINGBYLENGTH,
+    "CDLLADDERBOTTOM": talib.CDLLADDERBOTTOM,
+    "CDLLONGLEGGEDDOJI": talib.CDLLONGLEGGEDDOJI,
+    "CDLLONGLINE": talib.CDLLONGLINE,
+    "CDLMARUBOZU": talib.CDLMARUBOZU,
+    "CDLMATCHINGLOW": talib.CDLMATCHINGLOW,
+    "CDLMATHOLD": talib.CDLMATHOLD,
+    "CDLMORNINGDOJISTAR": talib.CDLMORNINGDOJISTAR,
+    "CDLMORNINGSTAR": talib.CDLMORNINGSTAR,
+    "CDLONNECK": talib.CDLONNECK,
+    "CDLPIERCING": talib.CDLPIERCING,
+    "CDLRICKSHAWMAN": talib.CDLRICKSHAWMAN,
+    "CDLRISEFALL3METHODS": talib.CDLRISEFALL3METHODS,
+    "CDLSEPARATINGLINES": talib.CDLSEPARATINGLINES,
+    "CDLSHOOTINGSTAR": talib.CDLSHOOTINGSTAR,
+    "CDLSHORTLINE": talib.CDLSHORTLINE,
+    "CDLSPINNINGTOP": talib.CDLSPINNINGTOP,
+    "CDLSTALLEDPATTERN": talib.CDLSTALLEDPATTERN,
+    "CDLSTICKSANDWICH": talib.CDLSTICKSANDWICH,
+    "CDLTAKURI": talib.CDLTAKURI,
+    "CDLTASUKIGAP": talib.CDLTASUKIGAP,
+    "CDLTHRUSTING": talib.CDLTHRUSTING,
+    "CDLTRISTAR": talib.CDLTRISTAR,
+    "CDLUNIQUE3RIVER": talib.CDLUNIQUE3RIVER,
+    "CDLUPSIDEGAP2CROWS": talib.CDLUPSIDEGAP2CROWS,
+    "CDLXSIDEGAP3METHODS": talib.CDLXSIDEGAP3METHODS,
+}
+patterns_dict = {
+    "CDL3BLACKCROWS": [3, "Reversal", "Three Black Crows"],
+    "CDL3INSIDE": [3, "Reversal", "Three Inside Up/Down"],
+    "CDL3LINESTRIKE": [4, "Continuation, Reversal", "Three-Line Strike"],
+    "CDL3OUTSIDE": [3, "Reversal", "Three Outside Up/Down"],
+    "CDL3WHITESOLDIERS": [3, "Reversal", "Three Advancing White Soldiers"],
+    "CDLABANDONEDBABY": [3, "Reversal", "Abandoned Baby"],
+    "CDLDARKCLOUDCOVER": [2, "Reversal, Bearish", "Dark Cloud Cover"],
+    "CDLDOJI": [1, "Neutral, Indecision", "Doji"],
+    "CDLDRAGONFLYDOJI": [1, "Reversal, Bullish", "Dragonfly Doji"],
+    "CDLENGULFING": [2, "Reversal", "Engulfing Pattern"],
+    "CDLEVENINGDOJISTAR": [2, "Reversal, Bearish", "Evening Doji Star"],
+    "CDLEVENINGSTAR": [3, "Reversal, Bearish", "Evening Star"],
+    "CDLGRAVESTONEDOJI": [1, "Reversal, Bearish", "Gravestone Doji"],
+    "CDLHAMMER": [1, "Reversal, Bullish", "Hammer"],
+    "CDLHANGINGMAN": [1, "Reversal, Bearish (waning buying power)", "Hanging Man"],
+    "CDLHARAMI": [2, "Reversal", "Harami Pattern"],
+    "CDLINVERTEDHAMMER": [1, "Reversal, Bullish", "Inverted Hammer"],
+    "CDLMARUBOZU": [1, "Neutral", "Marubozu"],
+    "CDLMORNINGDOJISTAR": [2, "Reversal, Bullish", "Morning Doji Star"],
+    "CDLMORNINGSTAR": [3, "Reversal, Bullish", "Morning Star"],
+    "CDLPIERCING": [2, "Reversal, Bullish", "Piercing Pattern"],
+    "CDLSHOOTINGSTAR": [1, "Reversal, Bearish", "Shooting Star"],
+    "CDLSPINNINGTOP": [1, "Neutral, Indecision", "Spinning Top"],
+}
+candle_names = [x.lower() for x in list(patterns_dict.keys())]

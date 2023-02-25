@@ -28,7 +28,9 @@ dag = DAG(
     dag_id="fmp-ticker-metrics-collection",
     default_args=default_args,
     catchup=False,
-    schedule_interval="00 2 * * *",  ## 2:00am Daily
+    schedule_interval="0 * * * *",  ## Every hour
+    ## Not sure if FMP will have intra day available
+    ## but they have data ready after the close
 )
 
 ## fmp does not like this collection method

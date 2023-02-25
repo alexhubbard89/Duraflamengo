@@ -26,6 +26,7 @@ sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 TDA = "https://api.tdameritrade.com/v1/marketdata/{ticker}/pricehistory?apikey={api}&periodType={periodType}&period={period}&frequencyType={frequencyType}&frequency={frequency}&needExtendedHoursData=True"
 DAILY_WRITE_BUFFER = sm_data_lake_dir + "/buffer/tda-daily-price/"
 MINUTE_WRITE_BUFFER = sm_data_lake_dir + "/buffer/tda-minute-price/"
+MINUTE_WATCHLIST_WRITE_BUFFER = sm_data_lake_dir + "/buffer/tda-minute-price-watchlist/"
 PRICE_TICKER_DIR = sm_data_lake_dir + "/tda-daily-price/ticker"
 
 ## functions
@@ -44,7 +45,7 @@ def make_minute_buffer():
     return True
 
 
-def get_historical_minute_price(ticker):
+def get_historical_minute_price(ticker, buffer=MINUTE_WRITE_BUFFER):
     ## request
     url = TDA.format(
         ticker=ticker.upper(),
@@ -73,22 +74,17 @@ def get_historical_minute_price(ticker):
             write_path = MINUTE_WRITE_BUFFER + date + "/{}.csv".format(ticker)
             df_write.to_csv(write_path, index=False)
         ## make file to signify collection
-        _ = pd.DataFrame().to_csv(
-            MINUTE_WRITE_BUFFER + "collected/{}.csv".format(ticker)
-        )
+        _ = pd.DataFrame().to_csv(buffer + "collected/{}.csv".format(ticker))
         return True
     except:
         return False
 
 
-def get_minute_collected():
-    return [
-        x.split("/")[-1].split(".")[0]
-        for x in glob.glob(MINUTE_WRITE_BUFFER + "collected/*")
-    ]
+def get_minute_collected(buffer: str = MINUTE_WRITE_BUFFER):
+    return [x.split("/")[-1].split(".")[0] for x in glob.glob(buffer + "collected/*")]
 
 
-def minute_price_pipeline(collect_threshold=0.85, loop_collect=240):
+def minute_price_pipeline(collect_threshold=0.85, loop_collect=240, watchlist=False):
     """
     https://developer.tdameritrade.com/content/authentication-faq
     Q: Are requests to the Post Access Token API throttled?
@@ -100,10 +96,15 @@ def minute_price_pipeline(collect_threshold=0.85, loop_collect=240):
     sc_tda = spark.sparkContext
 
     ## set collection variables
-    ticker_file = sm_data_lake_dir + "/seed-data/nasdaq_screener_1628807233734.csv"
-    ticker_df = pd.read_csv(ticker_file)
-    all_ticker_list = ticker_df["Symbol"].tolist()
-    collected_list = get_minute_collected()
+    if watchlist == False:
+        ticker_file = sm_data_lake_dir + "/seed-data/nasdaq_screener_1628807233734.csv"
+        ticker_df = pd.read_csv(ticker_file)
+        all_ticker_list = ticker_df["Symbol"].tolist()
+        buffer = MINUTE_WRITE_BUFFER
+    elif watchlist == True:
+        all_ticker_list = utils.get_watchlist()
+        buffer = MINUTE_WATCHLIST_WRITE_BUFFER
+    collected_list = get_minute_collected(buffer)
     tickers_left = list(set(all_ticker_list) - set(collected_list))
     ## delete later
     if len(tickers_left) < loop_collect:
@@ -138,12 +139,12 @@ def minute_price_pipeline(collect_threshold=0.85, loop_collect=240):
         ## make requests
         yesterday_price_df_list = (
             sc_tda.parallelize(ticker_list)
-            .map(lambda t: get_historical_minute_price(t))
+            .map(lambda t: get_historical_minute_price(t, buffer=buffer))
             .collect()
         )
 
         ## calculate percent collected
-        collected_list = get_minute_collected()
+        collected_list = get_minute_collected(buffer)
         tickers_left = list(set(all_ticker_list) - set(collected_list))
         if len(tickers_left) < loop_collect:
             ticker_list = tickers_left  ## prevents exception
@@ -154,6 +155,7 @@ def minute_price_pipeline(collect_threshold=0.85, loop_collect=240):
         collect_percent = len(collected_list) / len(all_ticker_list)
         collect_percent_og = collect_percent
         if collect_percent >= collect_threshold:
+            collect_percent = 1
             continue  ## no need to sleep
         ## iterat the counter and exit if too many
         count += 1
@@ -162,6 +164,7 @@ def minute_price_pipeline(collect_threshold=0.85, loop_collect=240):
             continue  ## no need to sleep
         ## Avoid throttle and sleep if needed
         loop_time = (datetime.now() - start_loop).seconds
+        print("Sleep time...")
         sleep_time = 60 - loop_time
         if sleep_time > 0:
             time.sleep(sleep_time)

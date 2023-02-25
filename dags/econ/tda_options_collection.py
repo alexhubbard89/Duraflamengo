@@ -2,11 +2,9 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import pytz
-import string
 import requests
 import time
 import glob
-import shutil
 import os
 
 ## spark
@@ -86,7 +84,7 @@ DATA_TYPES = {
     "interestRate": float,
     "underlyingPrice": float,
     "daysExp": int,
-    "collection_date": dt.date,
+    "collection_date": pd.Timestamp,
 }
 
 ###################
@@ -144,7 +142,7 @@ def clean_general(df):
         )
 
     ## get collection date
-    TODAY = dt.datetime.now(pytz.timezone("America/New_York")).date()
+    TODAY = dt.datetime.now(pytz.timezone("America/New_York"))
     full_chain_df["collection_date"] = TODAY
     ## make tyupes
     typed_data = format_data(full_chain_df)
@@ -153,6 +151,13 @@ def clean_general(df):
 
 
 def get_single(ticker):
+    ## file in buffer
+    fn = SINGLE_WRITE_BUFFER + "{}.csv".format(ticker)
+    if os.path.isfile(fn):
+        old_df = pd.read_csv(fn)
+    else:
+        old_df = pd.DataFrame()
+
     ## request
     url = CHAIN.format(
         ticker=ticker.upper(), api=os.environ["TDA_API_KEY"], strategy="SINGLE"
@@ -160,8 +165,7 @@ def get_single(ticker):
     r = requests.get(url=url)
     if r.content == b"":
         ## if no data then send it away
-        _ = df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
-        return True
+        return ticker
     ## there is data
     _json = r.json()
     if "error" in _json.keys():
@@ -171,19 +175,19 @@ def get_single(ticker):
     df = pd.DataFrame(_json).reset_index().rename(columns={"index": "expDate"})
     if len(df) == 0:
         ## if no data then send it away
-        _ = df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
-        return True
+        return ticker
     ## clean
-    try:
-        ## error happening:
-        ## TypeError: 'float' object is not iterable
-        ## tmp_calls = pd.concat([pd.DataFrame(r_calls[x]) for x in r_calls]).reset_index(drop=True)
-        ## File "/Users/alexanderhubbard/projects/Duraflamengo/dags/econ/tda_options_collection.py", line 128
-        chain_df = clean_general(df)
-        _ = chain_df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
-        return True
-    except:
-        return False
+    # try:
+    ## error happening:
+    ## TypeError: 'float' object is not iterable
+    ## tmp_calls = pd.concat([pd.DataFrame(r_calls[x]) for x in r_calls]).reset_index(drop=True)
+    ## File "/Users/alexanderhubbard/projects/Duraflamengo/dags/econ/tda_options_collection.py", line 128
+    clean_df = clean_general(df)
+    full_df = pd.concat([old_df, clean_df]).drop_duplicates(ignore_index=True)
+    full_df.to_csv(fn, index=False)
+    return ticker
+    # except:
+    #     return False
 
 
 def get_analytical(ticker):
@@ -220,15 +224,6 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
         All non-order based requests by personal use non-commercial
         applications are throttled to 120 per minute.
     """
-    ## only collect form 8am to 7pm ET.
-    now = dt.datetime.now(pytz.timezone("America/New_York"))
-    now_time = str(now.time()).split(".")[0]
-    if utils.is_between(now_time, ("08:00", "19:00")) == False:
-        print("\n\n\nDO NOT COLLECT\n\n\n")
-        ## DO NOT COLLECT
-        ## Its currently outside of defined collection hours
-        return False
-
     ## check what type of pipeline to fire off
     if strategy.lower() == "single":
         TMP_WRITE_BUFFER = SINGLE_WRITE_BUFFER
@@ -295,7 +290,7 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
         )
 
         ## calculate percent collected
-        collected_list = glob.glob(TMP_WRITE_BUFFER + "*")
+        collected_list = [x for x in option_chain_collection if x != False]
         tickers_left = list(set(all_ticker_list) - set(collected_list))
         if len(tickers_left) < loop_collect:
             ticker_list = tickers_left  ## prevents exception
@@ -307,9 +302,9 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
         collect_percent_og = collect_percent
         if collect_percent >= collect_threshold:
             continue  ## no need to sleep
-        ## iterat the counter and exit if too many
+        ## iterate the counter and exit if too many
         count += 1
-        if count > 200:
+        if count > 10:
             collect_percent = 1
             continue  ## no need to sleep
         ## Avoid throttle and sleep if needed
@@ -328,41 +323,36 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
 
 
 def migrate(strategy="single"):
-    ## Only migrate during collection times
-    now = dt.datetime.now(pytz.timezone("America/New_York"))
-    now_time = str(now.time()).split(".")[0]
-    if utils.is_between(now_time, ("08:00", "19:00")) == False:
-        print("\n\n\nDO NOT COLLECT\n\n\n")
-        ## DO NOT COLLECT
-        ## Its currently outside of defined collection hours
-        return False
 
     ## check what type of data to migrate
+    today = dt.datetime.now(pytz.timezone("America/New_York")).date()
     if strategy.lower() == "single":
         subdir = "tda-options-single"
         TMP_BUFFER = SINGLE_WRITE_BUFFER
+        dir_ = f"{tda_s.OPTIONS_SINGLE}/{today}"
     elif strategy.lower() == "analytical":
         subdir = "tda-options-analytical"
         TMP_BUFFER = ANALYTICAL_WRITE_BUFFER
+        dir_ = f"{tda_s.OPTIONS_ANALYTICAL}/{today}"
     else:
         raise ValueError("The strategy you requested is not an option.")
     ## start spark session
     spark = SparkSession.builder.appName("migrate-tda-options").getOrCreate()
     ## get data to migrate
     collected_options_df = (
-        spark.read.format("csv").options(header="true").load(TMP_BUFFER + "*")
+        spark.read.format("csv")
+        .options(header="true")
+        .load(TMP_BUFFER + "*")
+        .toPandas()
     )
-    today = dt.datetime.now(pytz.timezone("America/New_York")).date()
-    _ = utils.write_spark(spark, collected_options_df, subdir, today)
+    utils.mk_dir(dir_)
+    collected_options_df.to_parquet(f"{dir_}/data.parquet", index=False)
     return True
 
 
 def clear_buffer(strategy="single"):
     """ "
-    Custom buffer clear.
-    Check if it is currently withing defined collection time.
-    If it is, do not clear.
-    If it is outside of defined hours, clear buffer.
+    Custom buffer clear before the market opens.
     """
     ## check what type of data to migrate
     if strategy.lower() == "single":
@@ -374,10 +364,10 @@ def clear_buffer(strategy="single"):
 
     now = dt.datetime.now(pytz.timezone("America/New_York"))
     now_time = str(now.time()).split(".")[0]
-    if utils.is_between(now_time, ("08:00", "19:00")) == True:
-        print("\n\n\nDO NOT CLEAR BUFFER\n\n\n")
-        ## DO NOT CLEAR BUFFER
-        ## Bc its currently market hours
+    if utils.is_between(now_time, ("00:00", "09:30")) == True:
+        print("CLEAR BUFFER BEFORE MARKET HOURS")
+        utils.clear_buffer(subdir=subdir)
+        return True
+    else:
+        print("nDO NOT CLEAR BUFFER BC Market Hours")
         return False
-    utils.clear_buffer(subdir=subdir)
-    return True

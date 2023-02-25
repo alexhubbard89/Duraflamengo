@@ -626,3 +626,12 @@ def distribute_append_price(ds: dt.date, yesterday: bool = True):
     sc.parallelize(distribute_list).map(lambda r: append_price(**r)).collect()
     sc.stop()
     spark.stop()
+
+
+def collect_watchlist_daily_price(ds: dt.date):
+    """
+    Collect daily price for tickers on TDA watchlist.
+    """
+    ds = pd.to_datetime(ds).date()
+    watch_list = utils.get_watchlist() + ["^VIX"]
+    [collect_full_price(ds, ticker, buffer=False) for ticker in watch_list]

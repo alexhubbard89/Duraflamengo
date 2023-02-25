@@ -6,6 +6,7 @@ import common.utils as utils
 import derived_metrics.settings as der_s
 import fmp.settings as fmp_s
 import os
+import talib
 
 import matplotlib.pyplot as plt
 from mplfinance.original_flavor import candlestick_ohlc
@@ -187,3 +188,51 @@ def distribute_sr_creation(
     ).collect()
     sc.stop()
     spark.stop()
+
+
+def candlestick_graph_prep():
+    """
+    Enrich all tickers in TDA watchlist with:
+    - RSI
+    - MACD
+    - Candlestick pattern names
+    - Moving averages
+    """
+
+    watch_list = utils.get_watchlist()
+    for ticker in watch_list:
+        fn = f"{der_s.candlestick_graph_prep}/{ticker}.parquet"
+
+        ## load
+        full_df = pd.read_parquet(
+            f"{fmp_s.historical_ticker_price_full}/{ticker}.parquet"
+        ).sort_values("date")
+
+        ## make stats
+        full_df["rsi"] = talib.RSI(full_df["close"])
+        full_df["macd"], full_df["macdSignal"], full_df["macdHist"] = talib.MACD(
+            full_df["close"]
+        )
+        for i in [5, 13, 50, 100, 200]:
+            full_df[f"close_avg_{i}"] = talib.SMA(full_df["close"], i)
+
+        ## make patterns
+        for candle_name in der_s.candle_names:
+            full_df[candle_name] = der_s.ticker_methods[candle_name.upper()](
+                full_df["open"], full_df["high"], full_df["low"], full_df["close"]
+            )
+
+        patterns_by_day = []
+        for i in full_df.index:
+            tmp = full_df[der_s.candle_names].loc[i]
+            patterns_by_day.append(list(tmp.loc[abs(tmp) > 0].index))
+        full_df["pattern_list"] = patterns_by_day
+
+        ## add vix
+        vix_df = pd.read_parquet(f"{fmp_s.historical_ticker_price_full}/^VIX.parquet")[
+            ["date", "close", "change"]
+        ]
+        vix_df.columns = ["date", "vix_close", "vix_change"]
+        full_df = full_df.merge(vix_df, how="inner", on="date")
+
+        full_df.to_parquet(fn, index=False)

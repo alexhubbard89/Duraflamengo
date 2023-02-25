@@ -9,6 +9,7 @@ import os
 import glob
 from airflow.models import Variable
 import fmp.settings as fmp_s
+import tda.settings as tda_s
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from distutils.util import strtobool
@@ -392,6 +393,13 @@ def get_to_collect(
         return pd.read_parquet(fmp_s.to_collect + f"/{new_ds}.parquet")[
             "symbol"
         ].tolist()
+
+
+def get_watchlist() -> list:
+    """
+    Return current watchlist.
+    """
+    return list(set(pd.read_parquet(f"{tda_s.MY_WATCHLIST}/latest.parquet")["symbol"]))
 
 
 def make_input(key: str, value: str, kwarg_dict: dict):
