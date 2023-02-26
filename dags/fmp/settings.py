@@ -171,6 +171,57 @@ ci_15_year_fixed_rate_mortgage_average = (
 ## Stitched together macro signals
 full_macro = DL_DIR + "/fmp/full-macro-signals"
 
+## intraday stuff
+buffer_historical_chart_1_min = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/historical-chart/1-min"
+)
+buffer_historical_chart_15_min = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/historical-chart/15-min"
+)
+buffer_technical_indicator_1_min_sma_9 = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/technical_indicator/1-min/sma/window_9"
+)
+buffer_technical_indicator_1_min_sma_50 = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/technical_indicator/1-min/sma/window_50"
+)
+buffer_technical_indicator_15_min_sma_9 = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/technical_indicator/15-min/sma/window_9"
+)
+buffer_technical_indicator_15_min_sma_50 = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/technical_indicator/15-min/sma/window_50"
+)
+buffer_technical_indicator_1_min_rsi = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/technical_indicator/1-min/rsi"
+)
+buffer_technical_indicator_15_min_rsi = (
+    f"{os.environ['DL_DIR']}/buffer/fmp/technical_indicator/15-min/rsi"
+)
+historical_chart_1_min = f"{os.environ['DL_DIR']}/fmp/historical-chart/1-min"
+historical_chart_15_min = f"{os.environ['DL_DIR']}/fmp/historical-chart/15-min"
+technical_indicator_1_min_sma_9 = (
+    f"{os.environ['DL_DIR']}/fmp/technical_indicator/1-min/sma/window_9"
+)
+technical_indicator_1_min_sma_50 = (
+    f"{os.environ['DL_DIR']}/fmp/technical_indicator/1-min/sma/window_50"
+)
+technical_indicator_15_min_sma_9 = (
+    f"{os.environ['DL_DIR']}/fmp/technical_indicator/15-min/sma/window_9"
+)
+technical_indicator_15_min_sma_50 = (
+    f"{os.environ['DL_DIR']}/fmp/technical_indicator/15-min/sma/window_50"
+)
+technical_indicator_1_min_rsi = (
+    f"{os.environ['DL_DIR']}/fmp/technical_indicator/1-min/rsi"
+)
+technical_indicator_15_min_rsi = (
+    f"{os.environ['DL_DIR']}/fmp/technical_indicator/15-min/rsi"
+)
+
+buffer_shares_float = f"{os.environ['DL_DIR']}/buffer/fmp/shares_float"
+buffer_earning_calendar = f"{os.environ['DL_DIR']}/buffer/fmp/earning_calendar"
+shares_float = f"{os.environ['DL_DIR']}/fmp/shares_float"
+earning_calendar = f"{os.environ['DL_DIR']}/fmp/earning_calendar"
+
 
 ## urls
 # base
@@ -231,6 +282,31 @@ SECTOR_PE = FMP + "/v4/sector_price_earning_ratio?" + DS_E_SUFFIX
 INDUSTRY_PE = FMP + "/v4/industry_price_earning_ratio?" + DS_E_SUFFIX
 TREASURY = FMP + "/v4/treasury?" + START_END_SUFFIX
 ECONOMIC_INDICATORS = FMP + "/v4/economic?name={INDICATOR}&" + FULL_END_SUFFIX
+ONE_MINUTE_INTRADAY_PRICE = FMP + "/v3/historical-chart/1min/{TICKER}?apikey={API}"
+FIFTEEN_MINUTE_INTRADAY_PRICE = FMP + "/v3/historical-chart/15min/{TICKER}?apikey={API}"
+SMA_9_ONE_MINUTE_TECHNICAL_INDICATOR = (
+    FMP + "/v3/technical_indicator/1min/{TICKER}?period=9&type=sma&apikey={API}"
+)
+SMA_50_ONE_MINUTE_TECHNICAL_INDICATOR = (
+    FMP + "/v3/technical_indicator/1min/{TICKER}?period=50&type=sma&apikey={API}"
+)
+RSI_ONE_MINUTE_TECHNICAL_INDICATOR = (
+    FMP + "/v3/technical_indicator/1min/{TICKER}?period=9&type=rsi&apikey={API}"
+)
+SMA_9_FIFTEEN_MINUTE_TECHNICAL_INDICATOR = (
+    FMP + "/v3/technical_indicator/15min/{TICKER}?period=9&type=sma&apikey={API}"
+)
+SMA_50_FIFTEEN_MINUTE_TECHNICAL_INDICATOR = (
+    FMP + "/v3/technical_indicator/15min/{TICKER}?period=50&type=sma&apikey={API}"
+)
+RSI_FIFTEEN_MINUTE_TECHNICAL_INDICATOR = (
+    FMP + "/v3/technical_indicator/15min/{TICKER}?period=9&type=sma&apikey={API}"
+)
+
+SHARES_FLOAT = FMP + "/v4/shares_float?symbol={TICKER}&apikey={API}"
+EARNINGS_CALENDAR = (
+    FMP + "/v3/historical/earning_calendar/{TICKER}?limit=80&apikey={API}"
+)
 
 ## variable inputs
 calendar_collection_list = [
@@ -522,13 +598,35 @@ price_full_types = {
     "symbol": str,
 }
 
-thirty_minute_price_types = {
+intraday_price_types = {
     "date": dt.datetime,
     "open": float,
     "high": float,
     "low": float,
     "close": float,
     "volume": float,
+    "symbol": str,
+}
+
+technial_rsi_types = {
+    "date": dt.datetime,
+    "open": float,
+    "high": float,
+    "low": float,
+    "close": float,
+    "volume": float,
+    "rsi": float,
+    "symbol": str,
+}
+
+technial_sma_types = {
+    "date": dt.datetime,
+    "open": float,
+    "high": float,
+    "low": float,
+    "close": float,
+    "volume": float,
+    "sma": float,
     "symbol": str,
 }
 
@@ -877,4 +975,25 @@ ci_15_year_fixed_rate_mortgage_average_types = {
     "economic_indicator": str,
     "date": dt.date,
     "value": float,
+}
+
+shares_float_types = {
+    "symbol": str,
+    "date": dt.date,
+    "freeFloat": float,
+    "floatShares": float,
+    "outstandingShares": float,
+    "source": str,
+}
+
+earning_calendar_types = {
+    "date": dt.date,
+    "symbol": str,
+    "eps": float,
+    "epsEstimated": float,
+    "time": str,  ## time zone
+    "revenue": float,
+    "revenueEstimated": float,
+    "updatedFromDate": dt.date,
+    "fiscalDateEnding": dt.date,
 }

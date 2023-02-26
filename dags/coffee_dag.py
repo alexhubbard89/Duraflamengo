@@ -10,11 +10,12 @@ from airflow.operators.python import PythonOperator
 from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
 from airflow.models import Variable
 
+pyspark_app_home = Variable.get("PYSPARK_APP_HOME")
 local_tz = pendulum.timezone("US/Eastern")
 default_args = {
     "owner": "alex",
     "depends_on_past": False,
-    "start_date": datetime(2022, 8, 19, tzinfo=local_tz),
+    "start_date": datetime(2023, 2, 24, tzinfo=local_tz),
     "email": ["alexhubbard89@gmail.com"],
     "email_on_failure": False,
     "email_on_retry": False,
@@ -68,9 +69,35 @@ make_collection_list = PythonOperator(
     execution_timeout=timedelta(minutes=10),
 )
 
+earning_calendar = SparkSubmitOperator(
+    task_id="earning_calendar",
+    application=f"{pyspark_app_home}/dags/fmp/runner/earning_calendar.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="earning_calendar",
+    execution_timeout=timedelta(minutes=2),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+)
+
+shares_float = SparkSubmitOperator(
+    task_id="shares_float",
+    application=f"{pyspark_app_home}/dags/fmp/runner/shares_float.py",
+    executor_memory="15g",
+    driver_memory="15g",
+    name="shares_float",
+    execution_timeout=timedelta(minutes=2),
+    conf={"master": "spark://localhost:7077"},
+    dag=dag,
+)
+
 [
-    collect_delisted
-    >> collect_market_constituents
-    >> collected_calendar_data
-    >> make_collection_list
+    [
+        collect_delisted
+        >> collect_market_constituents
+        >> collected_calendar_data
+        >> make_collection_list
+    ],
+    earning_calendar,
+    shares_float,
 ]

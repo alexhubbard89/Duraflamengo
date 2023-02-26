@@ -82,10 +82,13 @@ def collect_generic_ticker(
     else:
         df_typed_end = df_typed.copy()
     ## save
+    buffer_date_fn = buffer_dir + f"/{ds}/{ticker}.parquet"
+    dl_fn = dl_ticker_dir + f"/{ticker}.parquet"
     if len(df_typed_end) > 0:
-        ## slice for grades results in no data sometimes
-        df_typed_end.to_parquet(buffer_dir + f"/{ds}/{ticker}.parquet", index=False)
-    df_typed.to_parquet(dl_ticker_dir + f"/{ticker}.parquet", index=False)
+        ## save sliced date
+        df_typed_end.to_parquet(buffer_date_fn, index=False)
+
+    df_typed.to_parquet(dl_fn, index=False)
     return True
 
 
@@ -162,7 +165,7 @@ def collect_generic_distributed(
     elif get_distribution_list == tda.get_option_collection_list:
         collection_list = get_distribution_list(ds)
     elif get_distribution_list == utils.get_watchlist:
-        collection_list = get_distribution_list(ds)
+        collection_list = get_distribution_list()
     while len(collection_list) > 0:
         distribution_list = [
             utils.make_input("ticker", t, kwargs) for t in collection_list
