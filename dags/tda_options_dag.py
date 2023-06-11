@@ -31,8 +31,8 @@ dag = DAG(
     dag_id="tda-options-collection",
     default_args=default_args,
     catchup=False,
-    schedule_interval="*/5 9-16 * * MON-FRI"
-    ## At every 5th minute past every hour from 9
+    schedule_interval="0,30 9-16 * * MON-FRI"
+    ## At minute 0 and 30 past every hour from 9 through
     # through 16 on every day-of-week from Monday
     # through Friday.
 )

@@ -51,7 +51,7 @@ class Graph:
         return axis
 
     @staticmethod
-    def make(df, ticker, tick_n=1):
+    def make(df, ticker, tick_n=1, save=True, show=False):
         df["day_num"] = df.index
         color_map = {"red": "#FF3032", "green": "#00B061"}
         # Create figure and axes
@@ -114,7 +114,10 @@ class Graph:
             ax.annotate(txt, (i - 0.5, annotate_y[i]), fontsize=14)
 
         # save plot
-        plt.savefig(f"{graph_s.full_candlestick}/{ticker}.jpg", bbox_inches="tight")
+        if save:
+            plt.savefig(f"{graph_s.full_candlestick}/{ticker}.jpg", bbox_inches="tight")
+        if show:
+            plt.show()
 
 
 def graph_watchlist_candlesticks():

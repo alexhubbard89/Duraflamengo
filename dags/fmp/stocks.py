@@ -633,5 +633,5 @@ def collect_watchlist_daily_price(ds: dt.date):
     Collect daily price for tickers on TDA watchlist.
     """
     ds = pd.to_datetime(ds).date()
-    watch_list = utils.get_watchlist() + ["^VIX"]
+    watch_list = utils.get_watchlist(extend=True) + ["^VIX"]
     [collect_full_price(ds, ticker, buffer=False) for ticker in watch_list]

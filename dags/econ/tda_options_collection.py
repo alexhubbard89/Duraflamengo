@@ -122,7 +122,7 @@ def clean_general(df):
     ]
 
     full_chain_df = pd.DataFrame()
-    for i in df.index[:2]:
+    for i in df.index:
         r_calls = df.loc[i, "callExpDateMap"]
         tmp_calls = pd.concat([pd.DataFrame(r_calls[x]) for x in r_calls]).reset_index(
             drop=True
@@ -151,13 +151,6 @@ def clean_general(df):
 
 
 def get_single(ticker):
-    ## file in buffer
-    fn = SINGLE_WRITE_BUFFER + "{}.csv".format(ticker)
-    if os.path.isfile(fn):
-        old_df = pd.read_csv(fn)
-    else:
-        old_df = pd.DataFrame()
-
     ## request
     url = CHAIN.format(
         ticker=ticker.upper(), api=os.environ["TDA_API_KEY"], strategy="SINGLE"
@@ -177,17 +170,15 @@ def get_single(ticker):
         ## if no data then send it away
         return ticker
     ## clean
-    # try:
-    ## error happening:
-    ## TypeError: 'float' object is not iterable
-    ## tmp_calls = pd.concat([pd.DataFrame(r_calls[x]) for x in r_calls]).reset_index(drop=True)
-    ## File "/Users/alexanderhubbard/projects/Duraflamengo/dags/econ/tda_options_collection.py", line 128
-    clean_df = clean_general(df)
-    full_df = pd.concat([old_df, clean_df]).drop_duplicates(ignore_index=True)
-    full_df.to_csv(fn, index=False)
+    df_typed = clean_general(df)
+    ## write
+    fn = SINGLE_WRITE_BUFFER + "{}.csv".format(ticker)
+    if os.path.isfile(fn):
+        ## not all data come back fill full history
+        old_df = pd.read_csv(fn)
+        df_typed = df_typed.append(old_df).drop_duplicates()
+    df_typed.to_csv(fn, index=False)
     return ticker
-    # except:
-    #     return False
 
 
 def get_analytical(ticker):
@@ -199,7 +190,7 @@ def get_analytical(ticker):
     if r.content == b"":
         ## if no data then send it away
         _ = df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
-        return True
+        return ticker
     ## there is data
     _json = r.json()
     if "error" in _json.keys():
@@ -210,11 +201,17 @@ def get_analytical(ticker):
     if len(df) == 0:
         ## if no data then send it away
         _ = df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
-        return True
+        return ticker
     ## clean
-    chain_df = clean_general(df)
-    _ = chain_df.to_csv(ANALYTICAL_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
-    return True
+    df_typed = clean_general(df)
+    ## write
+    fn = ANALYTICAL_WRITE_BUFFER + "{}.csv".format(ticker)
+    if os.path.isfile(fn):
+        ## not all data come back fill full history
+        old_df = pd.read_csv(fn)
+        df_typed = df_typed.append(old_df).drop_duplicates()
+    df_typed.to_csv(fn, index=False)
+    return ticker
 
 
 def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
@@ -246,11 +243,13 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
     # all_ticker_list = ticker_df["Symbol"].tolist()
 
     ## find tickers to collection options for
-    all_ticker_list = list(set(pd.read_parquet(tda_s.MY_WATCHLIST_LATEST)["symbol"]))
+    all_ticker_list = utils.get_watchlist()
+    # all_ticker_list = list(set(pd.read_parquet(tda_s.MY_WATCHLIST_LATEST)["symbol"]))
     collected_list = [
         x.split("/")[-1].split(".csv")[0] for x in glob.glob(TMP_WRITE_BUFFER + "*")
     ]
-    tickers_left = list(set(all_ticker_list) - set(collected_list))
+    collected_list = []
+    tickers_left = all_ticker_list
     if len(tickers_left) < loop_collect:
         ticker_list = tickers_left  ## prevents exception
     else:

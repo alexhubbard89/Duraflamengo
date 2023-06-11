@@ -216,6 +216,11 @@ def candlestick_graph_prep():
         for i in [5, 13, 50, 100, 200]:
             full_df[f"close_avg_{i}"] = talib.SMA(full_df["close"], i)
 
+        ## Calculate Stochastic Oscillator
+        full_df["slowk"], full_df["slowd"] = talib.STOCH(
+            full_df["high"], full_df["low"], full_df["close"]
+        )
+
         ## make patterns
         for candle_name in der_s.candle_names:
             full_df[candle_name] = der_s.ticker_methods[candle_name.upper()](

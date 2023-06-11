@@ -10,6 +10,7 @@ import glob
 from airflow.models import Variable
 import fmp.settings as fmp_s
 import tda.settings as tda_s
+import common.settings as comm_s
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from distutils.util import strtobool
@@ -133,6 +134,8 @@ def read_protect_parquet(path: str, params: dict = None):
             return pd.DataFrame()
         if params != None:
             if "evaluation" in params.keys():
+                if "date_type" in params.keys():
+                    params["slice"] = pd.to_datetime(params["slice"]).date()
                 if params["evaluation"] == "equal":
                     df = df.loc[df[params["column"]] == params["slice"]]
                 elif params["evaluation"] == "gt":
@@ -395,11 +398,17 @@ def get_to_collect(
         ].tolist()
 
 
-def get_watchlist() -> list:
+def get_watchlist(extend=False) -> list:
     """
     Return current watchlist.
     """
-    return list(set(pd.read_parquet(f"{tda_s.MY_WATCHLIST}/latest.parquet")["symbol"]))
+    watchlist_tda = list(
+        set(pd.read_parquet(f"{tda_s.MY_WATCHLIST}/latest.parquet")["symbol"])
+    )
+    if not extend:
+        return watchlist_tda
+    elif extend:
+        return list(set(watchlist_tda + comm_s.BASE_WATCHLIST))
 
 
 def make_input(key: str, value: str, kwarg_dict: dict):
