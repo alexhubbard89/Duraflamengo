@@ -44,6 +44,9 @@ gc_crossover = f"{DL_DIR}/derived-measurements/crossovers/golden-cross"
 dc_crossover = f"{DL_DIR}/derived-measurements/crossovers/death-cross"
 bull_20d_classifier = f"{DL_DIR}/derived-measurements/bull-20d-classifier"
 bear_20d_classifier = f"{DL_DIR}/derived-measurements/bear-20d-classifier"
+bull_call_spread_option_analysis = (
+    f"{DL_DIR}/derived-measurements/bull-call-spread-option-analysis"
+)
 
 ## Model paths
 MODEL_DIR = f"{DL_DIR.replace('data', 'code')}/models"

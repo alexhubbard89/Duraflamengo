@@ -83,7 +83,6 @@ DATA_TYPES = {
     "isDelayed": bool,
     "interestRate": float,
     "underlyingPrice": float,
-    "daysExp": int,
     "collection_date": pd.Timestamp,
 }
 
@@ -107,7 +106,6 @@ def clean_general(df):
     ## get expiration and days until
     a = df["expDate"].apply(lambda r: r.split(":"))
     df["expDate"] = a.apply(lambda r: pd.to_datetime(r[0]).date())
-    df["daysExp"] = a.apply(lambda r: r[1])
     df = df.rename(columns={"symbol": "ticker"})
 
     cols = [
@@ -118,7 +116,6 @@ def clean_general(df):
         "isDelayed",
         "interestRate",
         "underlyingPrice",
-        "daysExp",  ## duplicate but ok for now
     ]
 
     full_chain_df = pd.DataFrame()
@@ -186,10 +183,9 @@ def get_analytical(ticker):
     url = CHAIN.format(
         ticker=ticker.upper(), api=os.environ["TDA_API_KEY"], strategy="ANALYTICAL"
     )
-    r = requests.get(url=url)
+    r = requests.get(url=url, timeout=10)
     if r.content == b"":
         ## if no data then send it away
-        _ = df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
         return ticker
     ## there is data
     _json = r.json()
@@ -200,7 +196,6 @@ def get_analytical(ticker):
     df = pd.DataFrame(_json).reset_index().rename(columns={"index": "expDate"})
     if len(df) == 0:
         ## if no data then send it away
-        _ = df.to_csv(SINGLE_WRITE_BUFFER + "{}.csv".format(ticker), index=False)
         return ticker
     ## clean
     df_typed = clean_general(df)
@@ -214,7 +209,7 @@ def get_analytical(ticker):
     return ticker
 
 
-def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
+def pipeline(collect_threshold=0.85, loop_collect=240, strategy="analytical"):
     """
     https://developer.tdameritrade.com/content/authentication-faq
     Q: Are requests to the Post Access Token API throttled?
@@ -232,8 +227,9 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
         raise ValueError("The strategy you requested is not an option.")
 
     ## start spark session
-    spark = SparkSession.builder.appName("daily-tda-price-collect").getOrCreate()
-    sc_tda = spark.sparkContext
+    # turn off spark
+    # spark = SparkSession.builder.appName("daily-tda-price-collect").getOrCreate()
+    # sc_tda = spark.sparkContext
 
     # ## set collection variables
     # ticker_file = sm_data_lake_dir + "/seed-data/nasdaq_screener_1628807233734.csv"
@@ -243,7 +239,7 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
     # all_ticker_list = ticker_df["Symbol"].tolist()
 
     ## find tickers to collection options for
-    all_ticker_list = utils.get_watchlist()
+    all_ticker_list = utils.get_watchlist(extend=True)
     # all_ticker_list = list(set(pd.read_parquet(tda_s.MY_WATCHLIST_LATEST)["symbol"]))
     collected_list = [
         x.split("/")[-1].split(".csv")[0] for x in glob.glob(TMP_WRITE_BUFFER + "*")
@@ -282,11 +278,14 @@ def pipeline(collect_threshold=0.85, loop_collect=240, strategy="single"):
         )
 
         ## make requests
-        option_chain_collection = (
-            sc_tda.parallelize(ticker_list)
-            .map(lambda t: collection_fuction(t))
-            .collect()
-        )
+        # turn off spark
+        # option_chain_collection = (
+        #     sc_tda.parallelize(ticker_list)
+        #     .map(lambda t: collection_fuction(t))
+        #     .collect()
+        # )
+
+        option_chain_collection = [collection_fuction(ticker) for ticker in ticker_list]
 
         ## calculate percent collected
         collected_list = [x for x in option_chain_collection if x != False]

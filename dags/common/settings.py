@@ -199,4 +199,6 @@ BASE_WATCHLIST = [
     "ALGN",
     "CDNS",
     "CDK",
+    "SPY",
+    "QQQ",
 ]

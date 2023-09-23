@@ -487,40 +487,29 @@ def collect_insider_trading(ds: dt.date, yesterday: bool = True):
     )
 
 
-def collect_stock_news(ds: dt.date, yesterday: bool = True):
+def collect_stock_news():
     config_ = {
         "add_ticker": False,
         "url": s.STOCK_NEWS,
-        "buffer_dir": s.buffer_stock_news,
         "dl_ticker_dir": s.stock_news_ticker,
         "dtypes": s.stock_news_types,
-        "date_col": "publishedDate",
     }
-    utils.format_buffer(ds, s.buffer_stock_news, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.stock_news,
-        buffer_loc=s.buffer_stock_news,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-stock-news-collection",
         **config_,
     )
 
 
-def collect_press_releases(ds: dt.date, yesterday: bool = True):
+def collect_press_releases():
     config_ = {
         "add_ticker": False,
         "url": s.PRESS_RELEASE,
-        "buffer_dir": s.buffer_press_releases,
         "dl_ticker_dir": s.press_releases_ticker,
         "dtypes": s.press_release_types,
     }
-    utils.format_buffer(ds, s.buffer_press_releases, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.press_releases,
-        buffer_loc=s.buffer_press_releases,
-        distribute_through=generic.collect_generic_ticker,
+        distribute_through=generic.collect_generic_page,
         spark_app="daily-press-releases-collection",
         **config_,
     )

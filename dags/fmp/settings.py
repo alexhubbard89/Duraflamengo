@@ -229,7 +229,8 @@ FMP = "https://financialmodelingprep.com/api"
 FULL_END_SUFFIX = "from=1980-01-01&to={DSE}&apikey={API}"
 START_END_SUFFIX = "from={DSS}&to={DSE}&apikey={API}"
 TL_SUFFIX = "{TICKER}?limit=100000&apikey={API}"
-PAGE_COUNT_SUFFIX = "symbol={TICKER}&apikey={API}&page={PAGE}"
+NEWS_SUFFIX = "tickers={TICKER}&limit=100000&apikey={API}"
+PAGE_COUNT_SUFFIX = "{TICKER}?page={PAGE}&apikey={API}"
 DS_E_SUFFIX = "date={DS}&exchange=NYSE&apikey={API}"
 # full urls
 SP_CONSTITUENCY = FMP + "/v3/sp500_constituent?apikey="
@@ -273,8 +274,8 @@ KEY_METRICS_Q = KEY_METRICS + "&period=quarter"
 RATIOS_Q = RATIOS + "&period=quarter"
 EARNINGS_SURPRISES = FMP + "/v3/earnings-surprises/" + TL_SUFFIX
 INSIDER_TRADING = FMP + "/v4/insider-trading?" + TL_SUFFIX
-STOCK_NEWS = FMP + "/v3/stock_news?" + TL_SUFFIX
-PRESS_RELEASE = FMP + "/v3/press-releases/" + TL_SUFFIX
+STOCK_NEWS = FMP + "/v3/stock_news?" + NEWS_SUFFIX
+PRESS_RELEASE = FMP + "/v3/press-releases/" + PAGE_COUNT_SUFFIX
 SECTORS_PERFORMANCE = (
     FMP + "/v3/historical-sectors-performance?limit=100000&apikey={API}"
 )

@@ -88,7 +88,7 @@ class Graph:
         ax.set_xlim(-1, df["day_num"].iloc[-1] + 1)
 
         x = df["day_num"]
-        for i in [5, 13, 50, 100, 200]:
+        for i in [5, 10, 20, 50, 100, 200]:
             y = df[f"close_avg_{i}"]
             ax.plot(x, y, label=f"Rolling {i}")
         ax.legend(loc="upper left")
@@ -104,6 +104,22 @@ class Graph:
 
         ax3.plot(df["day_num"], df["macd"])
         ax3.grid(False)
+
+        ## Create pattern list
+        candlestick_patterns = [
+            "CDLDOJI",
+            "CDLHAMMER",
+            "CDLENGULFING",
+            "CDLSHOOTINGSTAR",
+            "CDLHARAMI",
+            "CDLMORNINGSTAR",
+            "CDLEVENINGSTAR",
+        ]
+        patterns_by_day = []
+        for i in df.index:
+            tmp = df[candlestick_patterns].loc[i]
+            patterns_by_day.append(list(tmp.loc[abs(tmp) > 0].index))
+        df["pattern_list"] = patterns_by_day
 
         pattern_list = df["pattern_list"]
         annotate_y = df["high"] + 1

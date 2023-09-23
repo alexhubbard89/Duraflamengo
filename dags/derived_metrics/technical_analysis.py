@@ -217,7 +217,7 @@ def calculate_price_levels(df, eps=1.2, min_samples=3):
             num_levels = 5
 
     # Add cluster labels to turning points
-    turning_points["cluster"] = clusters
+    turning_points["price_level_cluster"] = clusters
 
     return turning_points[
         [
@@ -230,7 +230,7 @@ def calculate_price_levels(df, eps=1.2, min_samples=3):
             "price_level_roc",
             "is_peak",
             "is_trough",
-            "cluster",
+            "price_level_cluster",
         ]
     ]
 
@@ -241,18 +241,18 @@ def calculate_strength_values(df):
     df["strength"] = 0.0
 
     # Volume Analysis
-    volume_avg = df.groupby("cluster")["volume"].mean()
-    df["strength"] += df["cluster"].map(volume_avg)
+    volume_avg = df.groupby("price_level_cluster")["volume"].mean()
+    df["strength"] += df["price_level_cluster"].map(volume_avg)
 
     # Time Period
-    time_period_duration = df.groupby("cluster")["date"].apply(
+    time_period_duration = df.groupby("price_level_cluster")["date"].apply(
         lambda x: (x.max() - x.min()).days
     )
-    df["strength"] += df["cluster"].map(time_period_duration)
+    df["strength"] += df["price_level_cluster"].map(time_period_duration)
 
     # Number of Touches
-    num_touches = df.groupby("cluster").size()
-    df["strength"] += df["cluster"].map(num_touches)
+    num_touches = df.groupby("price_level_cluster").size()
+    df["strength"] += df["price_level_cluster"].map(num_touches)
 
     return df
 
@@ -282,7 +282,7 @@ def find_support_resistance(df_input, symbol):
     df = df_close.merge(df, how="left", on=["symbol", "date"])
 
     # Filter for clusters with support and resistance levels
-    clusters_with_levels = df.loc[df["cluster"] >= 0].copy()
+    clusters_with_levels = df.loc[df["price_level_cluster"] >= 0].copy()
 
     # If no price levels found, return nulls
     if len(clusters_with_levels) == 0:
@@ -311,10 +311,10 @@ def find_support_resistance(df_input, symbol):
 
     # Calculate cluster statistics
     price_level_stats = (
-        clusters_with_levels.groupby("cluster")["close"]
+        clusters_with_levels.groupby("price_level_cluster")["close"]
         .agg(["mean"])
-        .join(df.groupby("cluster")["date"].agg([max, min]))
-        .join(df.groupby("cluster")["strength"].mean())
+        .join(df.groupby("price_level_cluster")["date"].agg([max, min]))
+        .join(df.groupby("price_level_cluster")["strength"].mean())
     )
 
     # Find closest support and resistance for each close price
@@ -702,7 +702,7 @@ def enrich(symbol: str, ds: dt.datetime, lb_years: int = 5):
         .merge(trendlines_df, how="left", on=jcols)
         .merge(volume_trend_df, how="left", on=jcols)
         .merge(
-            price_levels_df.drop(columns=["close", "low", "high", "volume", "cluster"]),
+            price_levels_df.drop(columns=["close", "low", "high", "volume"]),
             how="left",
             on=jcols,
         )
