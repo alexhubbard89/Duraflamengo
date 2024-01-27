@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
-import common.utils as utils
+from common import utils
 import fmp.settings as fmp_s
 import derived_metrics.settings as der_s
 import os
@@ -9,56 +9,215 @@ import os
 from pyspark.sql import SparkSession
 
 
-def make_ratios(ds: dt.date):
-    """Make ratios using daily closing price."""
-    if not os.path.isdir(fmp_s.historical_daily_price_full + f"/{ds}"):
-        return False
-    ## load data
-    params = {"evaluation": "lt_e", "column": "fillingDate", "slice": ds}
-    income_df = (
-        utils.distribute_read_many_parquet(ds, fmp_s.fmp_q_i_ticker, params)
-        .sort_values("fillingDate", ascending=False)
-        .drop_duplicates("symbol")[
-            ["symbol", "netIncome", "revenue", "weightedAverageShsOut"]
+# Function to classify EPS
+def classify_eps(eps):
+    # Define your EPS thresholds here
+    threshold_high_growth = 5.0  # Replace with your threshold value for 'High Growth'
+    # You can define other thresholds if needed
+
+    # Check the value of EPS and classify accordingly
+    if eps > threshold_high_growth:
+        return 4
+    # You can add more conditions for other categories
+
+
+# Function to classify PE
+def classify_pe(pe):
+    # Define your PE thresholds here
+    threshold_income = 10.0  # Replace with your threshold value for 'Income'
+    threshold_value = 20.0  # Replace with your threshold value for 'Value'
+    threshold_moderate_growth = (
+        30.0  # Replace with your threshold value for 'Moderate Growth'
+    )
+
+    # Check the value of PE and classify accordingly
+    if pe <= threshold_income:
+        return 1
+    elif threshold_income < pe <= threshold_value:
+        return 2
+    elif threshold_value < pe <= threshold_moderate_growth:
+        return 3
+    else:
+        return 4
+
+
+# Function to classify PS
+def classify_ps(ps):
+    # Define your PS thresholds here
+    threshold_income = 1.0  # Replace with your threshold value for 'Income'
+    threshold_value = 2.0  # Replace with your threshold value for 'Value'
+    threshold_moderate_growth = (
+        3.0  # Replace with your threshold value for 'Moderate Growth'
+    )
+
+    # Check the value of PS and classify accordingly
+    if ps <= threshold_income:
+        return 1
+    elif threshold_income < ps <= threshold_value:
+        return 2
+    elif threshold_value < ps <= threshold_moderate_growth:
+        return 3
+    else:
+        return 4
+
+
+# Function to classify PB
+def classify_pb(pb):
+    # Define your PB thresholds here
+    threshold_income = 1.0  # Replace with your threshold value for 'Income'
+    threshold_value = 2.0  # Replace with your threshold value for 'Value'
+    threshold_moderate_growth = (
+        3.0  # Replace with your threshold value for 'Moderate Growth'
+    )
+
+    # Check the value of PB and classify accordingly
+    if pb <= threshold_income:
+        return 1
+    elif threshold_income < pb <= threshold_value:
+        return 2
+    elif threshold_value < pb <= threshold_moderate_growth:
+        return 3
+    else:
+        return 4
+
+
+# Function to classify Dividend Yield
+def classify_dividend_yield(dividend_yield):
+    # Define your Dividend Yield thresholds here
+    threshold_high_growth = 5.0  # Replace with your threshold value for 'High Growth'
+    threshold_moderate_growth = (
+        2.0  # Replace with your threshold value for 'Moderate Growth'
+    )
+    threshold_value = 1.0  # Replace with your threshold value for 'Value'
+
+    # Check the value of Dividend Yield and classify accordingly
+    if dividend_yield >= threshold_high_growth:
+        return 4
+    elif threshold_moderate_growth <= dividend_yield < threshold_high_growth:
+        return 3
+    elif threshold_value <= dividend_yield < threshold_moderate_growth:
+        return 2
+    else:
+        return 1
+
+
+# Function to classify Net Income Margin
+def classify_net_income_margin(net_income_margin):
+    # Define your Net Income Margin thresholds here
+    threshold_high_growth = 0.2  # Replace with your threshold value for 'High Growth'
+    threshold_moderate_growth = (
+        0.1  # Replace with your threshold value for 'Moderate Growth'
+    )
+    threshold_value = 0.05  # Replace with your threshold value for 'Value'
+
+    # Check the value of Net Income Margin and classify accordingly
+    if net_income_margin > threshold_high_growth:
+        return 4
+    elif threshold_moderate_growth <= net_income_margin <= threshold_high_growth:
+        return 3
+    elif threshold_value <= net_income_margin < threshold_moderate_growth:
+        return 2
+    else:
+        return 1
+
+
+# Function to classify Debt-to-Equity Ratio
+def classify_debt_to_equity_ratio(debt_to_equity_ratio):
+    # Define your Debt-to-Equity Ratio thresholds here
+    threshold_high_growth = 1.0  # Replace with your threshold value for 'High Growth'
+    threshold_moderate_growth = (
+        0.5  # Replace with your threshold value for 'Moderate Growth'
+    )
+    threshold_value = 0.2  # Replace with your threshold value for 'Value'
+
+    # Check the value of Debt-to-Equity Ratio and classify accordingly
+    if debt_to_equity_ratio > threshold_high_growth:
+        return 4
+    elif threshold_moderate_growth <= debt_to_equity_ratio <= threshold_high_growth:
+        return 3
+    elif threshold_value <= debt_to_equity_ratio < threshold_moderate_growth:
+        return 2
+    else:
+        return 1
+
+
+def make_ratios(symbol: str):
+    iq_fn = f"{fmp_s.fmp_q_i_ticker}/{symbol}.parquet"
+    bsq_fn = f"{fmp_s.fmp_q_bs_ticker}/{symbol}.parquet"
+    cfq_fn = f"{fmp_s.fmp_q_cf_ticker}/{symbol}.parquet"
+    price_fn = f"{fmp_s.historical_ticker_price_full}/{symbol}.parquet"
+
+    try:
+        iq_df = (
+            pd.read_parquet(iq_fn)
+            .sort_values("fillingDate", ascending=False)[
+                [
+                    "symbol",
+                    "fillingDate",
+                    "netIncome",
+                    "revenue",
+                    "weightedAverageShsOut",
+                ]
+            ]
+            .rename(columns={"fillingDate": "date"})
+        )
+        iq_df["revenue_growth_rate"] = (
+            iq_df["revenue"].diff(-1) / iq_df["revenue"].shift(-1)
+        ) * 100
+
+        bsq_df = (
+            pd.read_parquet(bsq_fn)
+            .sort_values("fillingDate", ascending=False)[
+                [
+                    "symbol",
+                    "fillingDate",
+                    "commonStock",
+                    "totalAssets",
+                    "totalLiabilities",
+                    "totalDebt",
+                    "totalEquity",
+                ]
+            ]
+            .rename(columns={"fillingDate": "date"})
+        )
+        cfq_df = (
+            pd.read_parquet(cfq_fn)
+            .sort_values("fillingDate", ascending=False)[
+                ["symbol", "fillingDate", "dividendsPaid"]
+            ]
+            .rename(columns={"fillingDate": "date"})
+        )
+        price_df = pd.read_parquet(price_fn).sort_values("date", ascending=False)[
+            ["symbol", "date", "adjClose"]
         ]
-    )
-    balance_sheet_df = (
-        utils.distribute_read_many_parquet(ds, fmp_s.fmp_q_bs_ticker, params)
-        .sort_values("fillingDate", ascending=False)
-        .drop_duplicates("symbol")[
-            ["symbol", "commonStock", "totalAssets", "totalLiabilities"]
-        ]
-    )
-    cash_flow_df = (
-        utils.distribute_read_many_parquet(ds, fmp_s.fmp_q_cf_ticker, params)
-        .sort_values("fillingDate", ascending=False)
-        .drop_duplicates("symbol")[["symbol", "dividendsPaid"]]
-    )
-    spark = SparkSession.builder.appName("read-data").getOrCreate()
-    price_df = (
-        spark.read.format("parquet")
-        .option("path", fmp_s.historical_daily_price_full + f"/{ds}/*.parquet")
-        .load()
-        .toPandas()[["symbol", "date", "adjClose"]]
-    )
-    spark.stop()
-    ## join
-    ratios_df = (
-        price_df.merge(income_df, how="left", on="symbol")
-        .merge(balance_sheet_df, how="left", on="symbol")
-        .merge(cash_flow_df, how="left", on="symbol")
-    )
+    except FileNotFoundError:
+        # Handle missing files gracefully (e.g., print a message or take other appropriate action)
+        print(f"File not found for symbol {symbol}. Skipping analysis for this symbol.")
+        return None
+
     ## make ratios
+    ratios_df = (
+        price_df.merge(iq_df, how="left", on=["symbol", "date"])
+        .merge(bsq_df, how="left", on=["symbol", "date"])
+        .merge(cfq_df, how="left", on=["symbol", "date"])
+        .fillna(method="bfill")
+    )
+
+    ratios_df["dps"] = round(
+        ratios_df["dividendsPaid"] / (ratios_df["weightedAverageShsOut"] + 0.0001),
+        4,
+    )
+
     ratios_df["eps"] = round(
-        (ratios_df["netIncome"] - ratios_df["dividendsPaid"])
-        / ratios_df["commonStock"],
+        (ratios_df["netIncome"] - ratios_df["dps"])
+        / ratios_df["weightedAverageShsOut"],
         4,
     )
     ratios_df["pe"] = round(
         ratios_df["adjClose"]
         / (
-            (ratios_df["netIncome"] - ratios_df["dividendsPaid"])
-            / ratios_df["commonStock"]
+            (ratios_df["netIncome"] - ratios_df["dps"])
+            / ratios_df["weightedAverageShsOut"]
         ),
         4,
     )
@@ -78,10 +237,48 @@ def make_ratios(ds: dt.date):
         ),
         4,
     )
-    if len(ratios_df) > 0:
-        ## write to data-lake
-        ratios_df = utils.format_data(ratios_df, der_s.ratio_types)
-        ratios_df.to_parquet(f"{der_s.ratios}/{ds}.parquet", index=False)
+
+    ratios_df["dividend_yield"] = (ratios_df["dps"] / ratios_df["adjClose"]) * 100
+
+    # income
+    ratios_df["net_income_margin"] = (
+        ratios_df["netIncome"] / ratios_df["revenue"]
+    ) * 100
+
+    # equity
+    ratios_df["debt_to_equity_ratio"] = (
+        ratios_df["totalDebt"] / ratios_df["totalEquity"]
+    )
+
+    # Apply each classification function to the respective column in your dataset
+    ratios_df["eps_category"] = ratios_df["eps"].apply(lambda x: classify_eps(x))
+    ratios_df["pe_category"] = ratios_df["pe"].apply(lambda x: classify_pe(x))
+    ratios_df["ps_category"] = ratios_df["ps"].apply(lambda x: classify_ps(x))
+    ratios_df["pb_category"] = ratios_df["pb"].apply(lambda x: classify_pb(x))
+    ratios_df["dividend_yield_category"] = ratios_df["dividend_yield"].apply(
+        lambda x: classify_dividend_yield(x)
+    )
+    ratios_df["net_income_margin_category"] = ratios_df["net_income_margin"].apply(
+        lambda x: classify_net_income_margin(x)
+    )
+    ratios_df["debt_to_equity_ratio_category"] = ratios_df[
+        "debt_to_equity_ratio"
+    ].apply(lambda x: classify_debt_to_equity_ratio(x))
+
+    cols = [
+        "eps_category",
+        "pe_category",
+        "ps_category",
+        "pb_category",
+        "dividend_yield_category",
+        "net_income_margin_category",
+        "debt_to_equity_ratio_category",
+    ]
+    ratios_df["growth_class"] = ratios_df[cols].mean(axis=1)
+
+    # save all data
+    ratios_fn = f"{der_s.ratios}/{symbol}.parquet"
+    ratios_df.to_parquet(ratios_fn, index=False)
 
 
 def make_is_ratios(ds: dt.date):

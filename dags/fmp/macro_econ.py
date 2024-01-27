@@ -1,5 +1,4 @@
 import common.generic as generic
-from time import sleep
 import pandas as pd
 import datetime as dt
 import requests
@@ -8,13 +7,38 @@ import fmp.settings as s
 import common.utils as utils
 import glob
 
-## spark
-from pyspark.sql import SparkSession
-import pyspark.sql.types as T
-import pyspark.sql.functions as F
-from pyspark import SparkContext, SparkConf
-
 FMP_KEY = os.environ["FMP_KEY"]
+
+
+def collect_sector_price_earning_ratio(ds: dt.date):
+    """Collect all sector performance data and append to main dataset.
+
+    Args:
+    ds (str or datetime.date): The date for which to collect data.
+    """
+    # Check if ds is a string and convert it to datetime.date if necessary
+    if isinstance(ds, str):
+        try:
+            ds = dt.datetime.strptime(ds, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError("Invalid date string format. Please use 'YYYY-MM-DD'.")
+
+    url = s.SECTOR_PRICE_EARNING_RATIO.format(DATE=ds, API=FMP_KEY)
+    r = requests.get(url)
+    data = r.json()
+    if len(data) == 0:
+        False
+    df = pd.DataFrame(data)
+    df_typed = utils.format_data(df, s.sector_price_earning_ratio_types)
+    df_typed_full = df_typed.append(
+        pd.read_parquet(s.sector_price_earning_ratio)
+    ).drop_duplicates()
+    df_typed_full.to_parquet(s.sector_price_earning_ratio)
+    return True
+
+
+##### Everything below this point is old
+
 
 ## Collection
 def collect_sector_performance():

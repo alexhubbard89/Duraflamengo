@@ -201,4 +201,6 @@ BASE_WATCHLIST = [
     "CDK",
     "SPY",
     "QQQ",
+    "ZS",
+    "^VIX",
 ]

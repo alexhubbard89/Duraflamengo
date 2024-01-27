@@ -118,9 +118,7 @@ buffer_press_releases = DL_DIR + "/buffer/fmp/press-releases"
 press_releases = DL_DIR + "/fmp/press-releases"
 press_releases_ticker = DL_DIR + "/fmp/press-releases-ticker"
 ## Sector Market Performance
-historical_sectors_performance = (
-    DL_DIR + "/fmp/historical-sectors-performance/data.parquet"
-)
+sector_price_earning_ratio = DL_DIR + "/fmp/sector-price-earning-ratio/data.parquet"
 #### Macro Economic Section ####
 ## Sector and industry PE
 sector_pe = DL_DIR + "/fmp/sector-pe"
@@ -221,6 +219,7 @@ buffer_shares_float = f"{os.environ['DL_DIR']}/buffer/fmp/shares_float"
 buffer_earning_calendar = f"{os.environ['DL_DIR']}/buffer/fmp/earning_calendar"
 shares_float = f"{os.environ['DL_DIR']}/fmp/shares_float"
 earning_calendar = f"{os.environ['DL_DIR']}/fmp/earning_calendar"
+earning_call_transcript = f"{os.environ['DL_DIR']}/fmp/earnings-transcript"
 
 
 ## urls
@@ -276,8 +275,8 @@ EARNINGS_SURPRISES = FMP + "/v3/earnings-surprises/" + TL_SUFFIX
 INSIDER_TRADING = FMP + "/v4/insider-trading?" + TL_SUFFIX
 STOCK_NEWS = FMP + "/v3/stock_news?" + NEWS_SUFFIX
 PRESS_RELEASE = FMP + "/v3/press-releases/" + PAGE_COUNT_SUFFIX
-SECTORS_PERFORMANCE = (
-    FMP + "/v3/historical-sectors-performance?limit=100000&apikey={API}"
+SECTOR_PRICE_EARNING_RATIO = (
+    FMP + "/v4/sector_price_earning_ratio?date={DATE}&exchange=NYSE&apikey={API}"
 )
 SECTOR_PE = FMP + "/v4/sector_price_earning_ratio?" + DS_E_SUFFIX
 INDUSTRY_PE = FMP + "/v4/industry_price_earning_ratio?" + DS_E_SUFFIX
@@ -307,6 +306,10 @@ RSI_FIFTEEN_MINUTE_TECHNICAL_INDICATOR = (
 SHARES_FLOAT = FMP + "/v4/shares_float?symbol={TICKER}&apikey={API}"
 EARNINGS_CALENDAR = (
     FMP + "/v3/historical/earning_calendar/{TICKER}?limit=80&apikey={API}"
+)
+
+EARNINGS_CALL_TRANSCRIPT = (
+    FMP + "/v4/batch_earning_call_transcript/{TICKER}?year={YEAR}&apikey={API}"
 )
 
 ## variable inputs
@@ -760,22 +763,11 @@ stock_news_types = {
 
 press_release_types = {"symbol": str, "date": dt.datetime, "title": str, "text": str}
 
-sectors_performance_types = {
+sector_price_earning_ratio_types = {
     "date": dt.date,
-    "utilitiesChangesPercentage": float,
-    "basicMaterialsChangesPercentage": float,
-    "communicationServicesChangesPercentage": float,
-    "conglomeratesChangesPercentage": float,
-    "consumerCyclicalChangesPercentage": float,
-    "consumerDefensiveChangesPercentage": float,
-    "energyChangesPercentage": float,
-    "financialChangesPercentage": float,
-    "financialServicesChangesPercentage": float,
-    "healthcareChangesPercentage": float,
-    "industrialsChangesPercentage": float,
-    "realEstateChangesPercentage": float,
-    "servicesChangesPercentage": float,
-    "technologyChangesPercentage": float,
+    "sector": str,
+    "exchange": str,
+    "pe": float,
 }
 
 sector_pe_types = {"date": dt.date, "sector": str, "exchange": str, "pe": float}
@@ -997,4 +989,12 @@ earning_calendar_types = {
     "revenueEstimated": float,
     "updatedFromDate": dt.date,
     "fiscalDateEnding": dt.date,
+}
+
+earning_call_transcript_types = {
+    "symbol": str,
+    "quarter": float,
+    "year": float,
+    "date": dt.datetime,
+    "content": str,
 }

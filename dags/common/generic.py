@@ -98,6 +98,7 @@ def collect_generic_ticker(
     url: str,
     dl_ticker_dir: str,
     dtypes: dict,
+    year: float = None,
 ):
     """
     General FMP collection for tickers.
@@ -110,7 +111,10 @@ def collect_generic_ticker(
         - dl_ticker_dir: Ticker oriented data-lake location
         - dtypes: Data types
     """
-    r = requests.get(url.format(TICKER=ticker, API=FMP_KEY))
+    if year == None:
+        r = requests.get(url.format(TICKER=ticker, API=FMP_KEY))
+    elif year != None:
+        r = requests.get(url.format(TICKER=ticker, YEAR=year, API=FMP_KEY))
     if r.status_code == 429:
         return ticker
     data = r.json()
@@ -310,3 +314,11 @@ def collect_generic_distributed(
         collection_list = bad_response_df["return"].tolist()
         sc.stop()
         spark.stop()
+
+
+def distribute_function(method: Callable, spark_app: str):
+    distribution_list = utils.get_watchlist(extend=True)
+
+    spark = SparkSession.builder.appName(f"parallelize-{spark_app}").getOrCreate()
+    sc = spark.sparkContext
+    return_list = sc.parallelize(distribution_list).map(lambda r: method(r)).collect()

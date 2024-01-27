@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 import pendulum
-from fmp import stocks
+from fmp import stocks, macro_econ
 from derived_metrics import crossovers
 from derived_metrics import bull_classifier, bear_classifier
 
@@ -77,6 +77,13 @@ bear_classifier_daily_predict = PythonOperator(
     execution_timeout=timedelta(minutes=10),
 )
 
+collect_sector_price_earning_ratio = PythonOperator(
+    task_id="collect_sector_price_earning_ratio",
+    python_callable=macro_econ.collect_sector_price_earning_ratio,
+    op_kwargs={"ds": "{{ ds }}"},
+    dag=dag,
+    execution_timeout=timedelta(minutes=5),
+)
 
 [
     collect_watchlist_daily_price

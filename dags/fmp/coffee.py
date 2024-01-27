@@ -27,7 +27,6 @@ def fmp_collector(start: dt.date, end: dt.date, url: str, dl_path: str):
     if len(df) == 0:
         return False
     df.to_parquet(dl_path + f"/{start}.parquet")
-    df.to_parquet(dl_path + f"/latest.parquet")
     return True
 
 

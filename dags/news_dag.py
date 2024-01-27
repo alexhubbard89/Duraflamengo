@@ -49,16 +49,6 @@ collect_stock_news = SparkSubmitOperator(
     conf={"master": "spark://localhost:7077"},
     dag=dag,
 )
+## press release needs fixing
 
-collect_press_releases = SparkSubmitOperator(
-    task_id="collect_press_releases",
-    application=f"{pyspark_app_home}/dags/fmp/runner/collect_press_releases.py",
-    executor_memory="15g",
-    driver_memory="15g",
-    name="single_collection",
-    execution_timeout=timedelta(minutes=15),
-    conf={"master": "spark://localhost:7077"},
-    dag=dag,
-)
-
-[collect_stock_news, collect_press_releases]
+[collect_stock_news]

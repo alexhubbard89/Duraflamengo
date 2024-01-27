@@ -19,6 +19,7 @@ sm_data_lake_dir = Variable.get("sm_data_lake_dir")
 BUFFER_DIR = sm_data_lake_dir + "/buffer/{}/"
 DL_WRITE_DIR = sm_data_lake_dir + "/{subdir}/{date}/"
 
+
 ## functions
 def flip_sign(text):
     return "-" + text.strip("(").strip(")") if "(" in text else text
@@ -193,8 +194,7 @@ def distribute_read_many_parquet(ds: dt.date, path: str, params: dict = None):
     This will be used to turn the ticker files
     to a daily stream.
     """
-    to_collect_df = pd.read_parquet(fmp_s.to_collect + f"/{ds}.parquet")
-    collection_list = to_collect_df["symbol"].values.tolist()
+    collection_list = get_watchlist(extend=True)
     distribution_list = [f"{path}/{ticker}.parquet" for ticker in collection_list]
     spark = SparkSession.builder.appName("read-files").getOrCreate().newSession()
     sc = spark.sparkContext
@@ -313,7 +313,10 @@ def format_data(df: pd.DataFrame, types: dict) -> pd.DataFrame:
     This is the step before writing to parquet.
     """
     for col in df.columns:
-        if types[col] == dt.date:
+        if col not in types.keys():
+            # if not in type then make generic as string
+            df[col] = df[col].astype(str)
+        elif types[col] == dt.date:
             df[col] = pd.to_datetime(df[col], errors="coerce").apply(lambda r: r.date())
         elif types[col] == dt.datetime:
             df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -326,7 +329,11 @@ def format_data(df: pd.DataFrame, types: dict) -> pd.DataFrame:
                 .astype(types[col])
             )
         else:
-            df[col] = df[col].astype(types[col])
+            try:
+                df[col] = df[col].astype(types[col])
+            except:
+                # datatype error guard
+                df[col] = df[col].astype(str)
     return df
 
 

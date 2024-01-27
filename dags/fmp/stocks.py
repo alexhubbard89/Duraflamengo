@@ -255,114 +255,84 @@ def collect_analyst_estimates_quarter(ds: dt.date, yesterday: bool = True):
     )
 
 
-def collect_balance_sheets(ds: dt.date, yesterday: bool = True):
+def collect_balance_sheets():
     config_ = {
         "add_ticker": False,
         "url": s.BALANCE_SHEET,
-        "buffer_dir": s.buffer_fmp_a_bs,
         "dl_ticker_dir": s.fmp_a_bs_ticker,
         "dtypes": s.balance_sheet_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_bs, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.fmp_a_bs,
-        buffer_loc=s.buffer_fmp_a_bs,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-balance-sheet-collection",
         **config_,
     )
 
 
-def collect_balance_sheets_quarter(ds: dt.date, yesterday: bool = True):
+def collect_balance_sheets_quarter():
     config_ = {
         "add_ticker": False,
         "url": s.BALANCE_SHEET_Q,
-        "buffer_dir": s.buffer_fmp_q_bs,
         "dl_ticker_dir": s.fmp_q_bs_ticker,
         "dtypes": s.balance_sheet_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_bs, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.fmp_q_bs,
-        buffer_loc=s.buffer_fmp_q_bs,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-balance-sheet-quarter-collection",
         **config_,
     )
 
 
-def collect_cash_flow(ds: dt.date, yesterday: bool = True):
+def collect_cash_flow():
     config_ = {
         "add_ticker": False,
         "url": s.CASH_FLOW,
-        "buffer_dir": s.buffer_fmp_a_cf,
         "dl_ticker_dir": s.fmp_a_cf_ticker,
         "dtypes": s.cash_flow_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_cf, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.fmp_a_cf,
-        buffer_loc=s.buffer_fmp_a_cf,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-cash-flow-collection",
         **config_,
     )
 
 
-def collect_cash_flow_quarter(ds: dt.date, yesterday: bool = True):
+def collect_cash_flow_quarter():
     config_ = {
         "add_ticker": False,
         "url": s.CASH_FLOW_Q,
-        "buffer_dir": s.buffer_fmp_q_cf,
         "dl_ticker_dir": s.fmp_q_cf_ticker,
         "dtypes": s.cash_flow_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_cf, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.fmp_q_cf,
-        buffer_loc=s.buffer_fmp_q_cf,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-cash-flow-quarter-collection",
         **config_,
     )
 
 
-def collect_income(ds: dt.date, yesterday: bool = True):
+def collect_income():
     config_ = {
         "add_ticker": False,
         "url": s.INCOME_STATEMENT,
-        "buffer_dir": s.buffer_fmp_a_i,
         "dl_ticker_dir": s.fmp_a_i_ticker,
         "dtypes": s.income_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_a_i, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.fmp_a_i,
-        buffer_loc=s.buffer_fmp_a_i,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-income-collection",
         **config_,
     )
 
 
-def collect_income_quarter(ds: dt.date, yesterday: bool = True):
+def collect_income_quarter():
     config_ = {
         "add_ticker": False,
         "url": s.INCOME_STATEMENT_Q,
-        "buffer_dir": s.buffer_fmp_q_i,
         "dl_ticker_dir": s.fmp_q_i_ticker,
         "dtypes": s.income_types,
     }
-    utils.format_buffer(ds, s.buffer_fmp_q_i, yesterday=utils.strbool(yesterday))
     generic.collect_generic_distributed(
-        get_distribution_list=utils.get_to_collect,
-        dl_loc=s.fmp_q_i,
-        buffer_loc=s.buffer_fmp_q_i,
         distribute_through=generic.collect_generic_ticker,
         spark_app="daily-income-quarter-collection",
         **config_,
@@ -511,6 +481,23 @@ def collect_press_releases():
     generic.collect_generic_distributed(
         distribute_through=generic.collect_generic_page,
         spark_app="daily-press-releases-collection",
+        **config_,
+    )
+
+
+def collect_earnings_call_transcript(year: float = None):
+    if year == None:
+        year = dt.date.today().year
+    config_ = {
+        "add_ticker": False,
+        "url": s.EARNINGS_CALL_TRANSCRIPT,
+        "dl_ticker_dir": s.earning_call_transcript,
+        "dtypes": s.earning_call_transcript_types,
+        "year": year,
+    }
+    generic.collect_generic_distributed(
+        distribute_through=generic.collect_generic_ticker,
+        spark_app="daily-earnings-call-transcript-collection",
         **config_,
     )
 
