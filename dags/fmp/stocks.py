@@ -6,9 +6,54 @@ import os
 import fmp.settings as s
 import common.utils as utils
 from io import StringIO
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import col, current_date, date_add, to_date, max as max_
+import psycopg2
+from common.utils import write_to_postgres
+
+import psycopg2
+import os
+
 
 FMP_KEY = os.environ["FMP_KEY"]
+
+
+def get_distinct_tickers():
+    # Database connection parameters
+    conn_params = {
+        "dbname": os.environ.get("MARTY_DB_NAME"),
+        "user": os.environ.get("MARTY_DB_USR"),
+        "password": os.environ.get("MARTY_DB_PW"),
+        "host": os.environ.get("MARTY_DB_HOST"),
+        "port": os.environ.get("MARTY_DB_PORT", "5432"),
+    }
+
+    try:
+        # Connect to the database
+        conn = psycopg2.connect(**conn_params)
+        # Create a cursor object
+        cursor = conn.cursor()
+
+        # SQL to fetch distinct ticker symbols
+        query = "SELECT DISTINCT symbol FROM watchlist;"
+
+        # Execute the query
+        cursor.execute(query)
+
+        # Fetch all distinct ticker symbols
+        tickers = cursor.fetchall()
+
+        # Convert list of tuples to list of strings
+        tickers = [ticker[0] for ticker in tickers]
+
+        # Close the cursor and the connection
+        cursor.close()
+        conn.close()
+
+        return tickers
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
 
 
 def collect_full_price(ds: dt.date, ticker: str, buffer: bool = True):
@@ -21,6 +66,7 @@ def collect_full_price(ds: dt.date, ticker: str, buffer: bool = True):
 
     Inputs: Date and ticker to collect.
     """
+    print(ticker)
     ds_start = dt.date(1980, 1, 1)
     r = requests.get(
         s.HISTORICAL_PRICE_FULL.format(DSS=ds_start, DSE=ds, TICKER=ticker, API=FMP_KEY)
@@ -502,6 +548,20 @@ def collect_earnings_call_transcript(year: float = None):
     )
 
 
+def collect_earnings_calendar():
+    config_ = {
+        "add_ticker": False,
+        "url": s.EARNINGS_CALENDAR,
+        "dl_ticker_dir": s.earning_calendar,
+        "dtypes": s.earning_calendar_types,
+    }
+    generic.collect_generic_distributed(
+        distribute_through=generic.collect_generic_ticker,
+        spark_app="daily-earnings-calendar",
+        **config_,
+    )
+
+
 def collect_end_of_day_prices(ds: dt.date, yesterday: bool = True):
     """
     - Read full stream and write to data lake.
@@ -609,5 +669,363 @@ def collect_watchlist_daily_price(ds: dt.date):
     Collect daily price for tickers on TDA watchlist.
     """
     ds = pd.to_datetime(ds).date()
-    watch_list = utils.get_watchlist(extend=True) + ["^VIX"]
-    [collect_full_price(ds, ticker, buffer=False) for ticker in watch_list]
+    # wl = Watchlist()
+    # wl.refresh_watchlist(extended=True)
+    # watchlist = wl.df["symbol"]
+    watchlist = get_distinct_tickers()
+    [collect_full_price(ds, ticker, buffer=False) for ticker in watchlist]
+
+
+def fetch_current_price(symbol):
+    url = s.CURRENT_PRICE.format(TICKER=symbol, API=FMP_KEY)
+    try:
+        r = requests.get(url)
+        data = r.json()
+        pd.DataFrame(data)
+
+        if data and isinstance(data, list):
+            data = data[0]  # Assuming the first item is the relevant one
+            df = pd.DataFrame([data])
+            df["timestamp"] = dt.datetime.utcfromtimestamp(df["timestamp"])
+            df["date"] = df["timestamp"].apply(lambda r: r.date())
+            # Format and type the data
+            typed_df = utils.format_data(df, s.current_price_types)
+            return typed_df
+        else:
+            print(f"No data found for {symbol}")
+            return pd.DataFrame()
+    except Exception as e:
+        print(f"Error fetching data for {symbol}: {e}")
+        return pd.DataFrame()
+
+
+def update_watchlist_prices():
+    """
+    Get realtime price of stock
+    """
+    # Get the current time
+    now = dt.datetime.now()
+    # Define the cut-off time as 9:30 AM
+    cut_off_time = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    if now < cut_off_time:
+        return  # do not append yet
+
+    # wl = Watchlist()
+    # wl.refresh_watchlist(extended=False)
+    # symbols = wl.df["symbol"]
+    symbols = get_distinct_tickers()
+
+    dfs = []
+    # Establish a database connection
+    conn = psycopg2.connect(
+        dbname=os.environ.get("MARTY_DB_NAME"),
+        user=os.environ.get("MARTY_DB_USR"),
+        password=os.environ.get("MARTY_DB_PW"),
+        host=os.environ.get("MARTY_DB_HOST"),
+        port=os.environ.get("MARTY_DB_PORT", "5432"),
+    )
+    cur = conn.cursor()
+    for symbol in symbols:
+        current_data = fetch_current_price(symbol)
+        if current_data.empty:
+            print(f"No data found for {symbol}")
+            continue
+        dfs.append(current_data)  # save to local
+
+        # Prepare data for database operations
+        data = {
+            "open": current_data.loc[0, "open"],
+            "high": current_data.loc[0, "dayHigh"],
+            "low": current_data.loc[0, "dayLow"],
+            "close": current_data.loc[0, "price"],
+            "adj_close": current_data.loc[0, "price"],
+            "volume": current_data.loc[0, "volume"],
+            "unadjusted_volume": current_data.loc[0, "volume"],
+            "change": current_data.loc[0, "change"],
+            "change_percent": current_data.loc[0, "changesPercentage"],
+            "vwap": (
+                current_data.loc[0, "dayLow"]
+                + current_data.loc[0, "dayHigh"]
+                + current_data.loc[0, "price"]
+            )
+            / 3,  # Simplified VWAP calculation
+            "label": current_data.loc[0, "name"],
+            "change_over_time": None,
+        }
+
+        # Check if the entry exists for today
+        cur.execute(
+            "SELECT 1 FROM symbol_daily_price WHERE symbol = %s AND date = CURRENT_DATE;",
+            (symbol,),
+        )
+        exists = cur.fetchone()
+
+        if exists:
+            # Update existing row
+            update_query = """
+            UPDATE symbol_daily_price
+            SET open = %(open)s, high = %(high)s, low = %(low)s, close = %(close)s,
+                adj_close = %(adj_close)s, volume = %(volume)s, unadjusted_volume = %(unadjusted_volume)s,
+                change = %(change)s, change_percent = %(change_percent)s, vwap = %(vwap)s, label = %(label)s,
+                change_over_time = %(change_over_time)s
+            WHERE symbol = %(symbol)s AND date = CURRENT_DATE;
+            """
+            cur.execute(update_query, {**data, "symbol": symbol})
+        else:
+            # Insert new row
+            insert_query = """
+            INSERT INTO symbol_daily_price
+                (date, symbol, open, high, low, close, adj_close, volume, unadjusted_volume, change, 
+                 change_percent, vwap, label, change_over_time)
+            VALUES
+                (CURRENT_DATE, %(symbol)s, %(open)s, %(high)s, %(low)s, %(close)s, %(adj_close)s, 
+                 %(volume)s, %(unadjusted_volume)s, %(change)s, %(change_percent)s, %(vwap)s, 
+                 %(label)s, %(change_over_time)s);
+            """
+            cur.execute(insert_query, {**data, "symbol": symbol})
+
+        conn.commit()
+
+    df = pd.concat(dfs, ignore_index=True)
+    df.to_parquet(s.current_price + "/data.parquet", index=False)
+
+    # Close the connection
+    cur.close()
+    conn.close()
+
+
+def append_current_to_historical():
+    # Get the current time
+    now = dt.datetime.now()
+    # Define the cut-off time as 9:30 AM
+    cut_off_time = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    if now < cut_off_time:
+        return  # do not append yet
+
+    # wl = Watchlist()
+    # wl.refresh_watchlist(extended=False)
+    # symbols = wl.df["symbol"]
+
+    symbols = get_distinct_tickers()
+    current_price_df = pd.read_parquet(s.current_price + "/data.parquet")
+    current_price_df = current_price_df.rename(
+        columns={"dayLow": "low", "dayHigh": "high"}
+    )
+    current_price_df.loc[:, "close"] = current_price_df.loc[:, "price"]
+    current_price_df.loc[:, "adjClose"] = current_price_df.loc[:, "price"]
+    current_price_df.loc[:, "date"] = pd.to_datetime(current_price_df["date"]).apply(
+        lambda r: r.date()
+    )
+    current_price_df = current_price_df[
+        [
+            "symbol",
+            "date",
+            "low",
+            "change",
+            "close",
+            "volume",
+            "adjClose",
+            "high",
+            "open",
+        ]
+    ]
+
+    for symbol in symbols:
+        tmp_df = current_price_df.loc[current_price_df["symbol"] == symbol]
+        max_date = tmp_df["date"].max()
+        historical_price_full = pd.read_parquet(
+            s.historical_ticker_price_full + f"/{symbol}.parquet"
+        )
+        historical_price_full.loc[:, "date"] = pd.to_datetime(
+            historical_price_full["date"]
+        ).apply(lambda r: r.date())
+        historical_price_full = historical_price_full.loc[
+            historical_price_full["date"] < max_date
+        ]
+        historical_price_full = (
+            historical_price_full.append(tmp_df)
+            .sort_values("date", ascending=False)
+            .drop_duplicates("date")
+        )
+        historical_price_full.to_parquet(
+            s.historical_ticker_price_full + f"/{symbol}.parquet", index=False
+        )
+
+
+def load_and_process_earnings_data():
+    spark = (
+        SparkSession.builder.appName("Load Earnings Data")
+        .config("spark.jars.packages", os.environ.get("POSTGRES_JAR"))
+        .getOrCreate()
+    )
+
+    # Database configuration
+    db_url = f"jdbc:postgresql://{os.environ.get('MARTY_DB_HOST')}:{os.environ.get('MARTY_DB_PORT', '5432')}/{os.environ.get('MARTY_DB_NAME')}"
+    db_user = os.environ.get("MARTY_DB_USR")
+    db_password = os.environ.get("MARTY_DB_PW")
+
+    # Load watchlist data
+    watchlist_df = (
+        spark.read.format("jdbc")
+        .option("url", db_url)
+        .option("dbtable", "watchlist")
+        .option("user", db_user)
+        .option("password", db_password)
+        .option("driver", "org.postgresql.Driver")
+        .load()
+    )
+
+    # Get distinct symbols
+    distinct_symbols = (
+        watchlist_df.select("symbol").distinct().rdd.flatMap(lambda x: x).collect()
+    )
+
+    # Load earnings data
+    earnings_data = spark.read.parquet(s.earning_calendar)
+    earnings_data = earnings_data.select(
+        "date",
+        "symbol",
+        "eps",
+        "epsEstimated",
+        "time",
+        "revenue",
+        "revenueEstimated",
+        "updatedFromDate",
+        "fiscalDateEnding",
+    ).toDF(
+        "date",
+        "symbol",
+        "eps",
+        "eps_estimated",
+        "time",
+        "revenue",
+        "revenue_estimated",
+        "updated_from_date",
+        "fiscal_date_ending",
+    )
+
+    # Filter data based on watchlist
+    filtered_earnings_data = earnings_data.filter(
+        earnings_data.symbol.isin(distinct_symbols)
+    )
+
+    # Overwrite filtered data to PostgreSQL
+    write_to_postgres(
+        filtered_earnings_data,
+        "earnings_calendar",
+        mode="overwrite",
+    )
+
+    spark.stop()
+
+
+def load_and_update_ticker_data():
+    """
+    Write historical daily price to postgres
+    """
+    spark = (
+        SparkSession.builder.appName("Load Daily Price Data")
+        .config("spark.jars.packages", os.environ.get("POSTGRES_JAR"))
+        .getOrCreate()
+    )
+
+    # Get distinct symbols
+    distinct_symbols_df = utils.get_max_date(tbl="symbol_daily_price", date_column="date")
+
+    # Process each symbol
+    for i in distinct_symbols_df.index:
+        symbol = distinct_symbols_df.loc[i, "symbol"]
+        max_date = distinct_symbols_df.loc[i, "max_date"]
+        
+        # Load data from .parquet files
+        file_path = f"{s.historical_ticker_price_full}/{symbol}.parquet"
+        if not os.path.exists(file_path):
+            continue
+        pd_df = pd.read_parquet(file_path)
+        stock_data_df = spark.createDataFrame(pd_df)
+        # stock_data_df = spark.read.parquet(file_path)
+        # Expected: timestamp, Found: INT64. I cant figure out how to resolve
+
+        # Ensure the 'date' column is of type DATE
+        stock_data_df = stock_data_df.withColumn("date", to_date(col("date")))
+
+        # Rename the columns
+        stock_data_df = (
+            stock_data_df.withColumnRenamed("adjClose", "adj_close")
+            .withColumnRenamed("unadjustedVolume", "unadjusted_volume")
+            .withColumnRenamed("changePercent", "change_percent")
+            .withColumnRenamed("changeOverTime", "change_over_time")
+        )
+
+        # Filter data to only include entries from the last 6 years
+        min_date = date_add(current_date(), -6 * 365)  # 6 years back from today
+        filtered_data_df = stock_data_df.filter((col("date") >= min_date) & (col("date") > max_date))
+
+        # Write only new entries to PostgreSQL
+        if filtered_data_df.count() > 0:
+            write_to_postgres(
+                filtered_data_df,
+                "symbol_daily_price",
+                mode="append",
+            )
+    spark.stop()
+
+def load_and_update_ticker_news():
+    spark = SparkSession.builder \
+        .appName("Load News Data") \
+        .config("spark.jars.packages", os.environ.get("POSTGRES_JAR")) \
+        .getOrCreate()
+
+    # Database configuration
+    db_url = f"jdbc:postgresql://{os.environ.get('MARTY_DB_HOST')}:{os.environ.get('MARTY_DB_PORT', '5432')}/{os.environ.get('MARTY_DB_NAME')}"
+    db_properties = {"user": os.environ.get("MARTY_DB_USR"), "password": os.environ.get("MARTY_DB_PW"), "driver": "org.postgresql.Driver"}
+
+    # Get distinct symbols from utility function
+    distinct_symbols = utils.get_distinct_tickers()
+
+    for symbol in distinct_symbols:
+        file_path = f"{s.stock_news_ticker}/{symbol}.parquet"
+        if not os.path.exists(file_path):
+            continue
+
+        # Load data from Parquet via Python (to handle types correctly)
+        pd_df = pd.read_parquet(file_path)
+        new_data_df = spark.createDataFrame(pd_df)
+
+        # Rename columns appropriately
+        new_data_df = new_data_df.withColumnRenamed("publishedDate", "published_date")
+
+        # Repartition the DataFrame to optimize Spark execution
+        new_data_df = new_data_df.repartition(200)  # Adjust the number of partitions as necessary
+
+        # Read existing news data for the symbol from PostgreSQL, fetching only necessary columns
+        existing_data_df = spark.read.format("jdbc") \
+            .option("url", db_url) \
+            .option("dbtable", f"(SELECT symbol, published_date, url FROM ticker_news WHERE symbol = '{symbol}') AS subquery") \
+            .options(**db_properties) \
+            .load()
+        
+        # Repartition the existing data DataFrame as well
+        existing_data_df = existing_data_df.repartition(200)
+
+        # Determine the latest date in the existing data
+        max_date = existing_data_df.select(max_("published_date")).collect()[0][0]
+        if max_date is None:
+            max_date = dt.datetime.now() - pd.DateOffset(years=1)  # Fallback to last year if no data exists
+
+        # Filter new data to include only entries more recent than the max_date
+        new_data_df = new_data_df.filter(col("published_date") > max_date)
+
+        # Find the data that does not exist in the database
+        new_entries_df = new_data_df.join(existing_data_df, ["symbol", "published_date", "url"], "left_anti")
+
+        # Write only new entries to PostgreSQL
+        if new_entries_df.count() > 0:
+            write_to_postgres(
+                new_entries_df,
+                "ticker_news",
+                mode="append",
+            )
+
+    spark.stop()
+

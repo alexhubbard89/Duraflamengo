@@ -48,7 +48,6 @@ BASE_WATCHLIST = [
     "UAL",
     "SHOP",
     "NIO",
-    "AMAT",
     "PEP",
     "GILD",
     "BP",
@@ -113,7 +112,6 @@ BASE_WATCHLIST = [
     "CCL",
     "RCL",
     "MAR",
-    "ALXN",
     "STZ",
     "PTON",
     "CVS",
@@ -203,4 +201,5 @@ BASE_WATCHLIST = [
     "QQQ",
     "ZS",
     "^VIX",
+    "YOU",
 ]

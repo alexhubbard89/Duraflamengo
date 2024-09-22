@@ -6,7 +6,7 @@ import pendulum
 ## airflow
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.models import Variable
 
 # python code
@@ -33,7 +33,7 @@ dag = DAG(
     dag_id="new-tda-options-collection",
     default_args=default_args,
     catchup=False,
-    schedule_interval="0,30 9-16 * * MON-FRI"
+    schedule_interval="0,30 9-16 * * MON-FRI",
     ## At minute 0 and 30 past every hour from 9 through
     # through 16 on every day-of-week from Monday
     # through Friday.

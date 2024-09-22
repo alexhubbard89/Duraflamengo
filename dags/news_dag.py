@@ -6,7 +6,7 @@ import pendulum
 ## airflow
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.models import Variable
 
 # python code
@@ -33,7 +33,7 @@ dag = DAG(
     dag_id="collect-news",
     default_args=default_args,
     catchup=False,
-    schedule_interval="0,30 6-20 * * *"
+    schedule_interval="0,30 6-20 * * *",
     ## At minute 0 and 30 past every hour from 6 through
     # through 10 on every day-of-week
 )
@@ -42,13 +42,31 @@ dag = DAG(
 collect_stock_news = SparkSubmitOperator(
     task_id="collect_stock_news",
     application=f"{pyspark_app_home}/dags/fmp/runner/collect_stock_news.py",
+    name="single_collection",
+    conn_id="spark_default",  # This now properly enforces local[*] master
     executor_memory="15g",
     driver_memory="15g",
-    name="single_collection",
+    conf={
+        "spark.executor.memory": "15g",
+        "spark.driver.memory": "15g",
+    },
     execution_timeout=timedelta(minutes=15),
-    conf={"master": "spark://localhost:7077"},
     dag=dag,
 )
-## press release needs fixing
 
-[collect_stock_news]
+migrate_news = SparkSubmitOperator(
+    task_id="migrate_news",
+    application=f"{pyspark_app_home}/dags/fmp/runner/migrate_news.py",
+    name="single_collection",
+    conn_id="spark_default",
+    executor_memory="15g",
+    driver_memory="15g",
+    conf={
+        "spark.executor.memory": "15g",
+        "spark.driver.memory": "15g",
+    },
+    execution_timeout=timedelta(minutes=15),
+    dag=dag,
+)
+
+[collect_stock_news >> migrate_news]

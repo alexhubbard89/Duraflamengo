@@ -9,7 +9,7 @@ import requests
 import os
 import common.utils as utils
 import tda.collect as tda
-import glob
+from collections import deque
 from time import sleep
 
 FMP_KEY = os.environ["FMP_KEY"]
@@ -41,142 +41,45 @@ def collect_generic_daily(
     return True
 
 
-def collect_generic_ticker_old(
-    ds: dt.date,
-    ticker: str,
-    add_ticker: bool,
-    url: str,
-    buffer_dir: str,
-    dl_ticker_dir: str,
-    dtypes: dict,
-    date_col: str = "date",
-    has_date: bool = True,
-):
-    """
-    General FMP collection for tickers.
+# def collect_generic_ticker(
+#     ticker: str,
+#     add_ticker: bool,
+#     url: str,
+#     dl_ticker_dir: str,
+#     dtypes: dict,
+#     year: float = None,
+# ):
+#     """
+#     General FMP collection for tickers.
 
-    Inputs:
-        - ds: Date
-        - ticker: ticker
-        - add_ticker: Is ticker missing from response
-        - url: Base url
-        - buffer_dir: Buffer location
-        - dl_ticker_dir: Ticker oriented data-lake location
-        - dtypes: Data types
-        - date_col: Name of date column
-    """
-    r = requests.get(url.format(TICKER=ticker, API=FMP_KEY))
-    if r.status_code == 429:
-        return ticker
-    data = r.json()
-    if len(data) == 0:
-        return False
-    df = pd.DataFrame(pd.DataFrame(data))
-    if add_ticker:
-        df["symbol"] = ticker
-    df_typed = utils.format_data(df, dtypes)
-    if has_date:
-        df_typed_end = df_typed.loc[
-            pd.to_datetime(df_typed[date_col]).apply(lambda r: r.date()) == ds
-        ].copy()
-    else:
-        df_typed_end = df_typed.copy()
-    ## save
-    buffer_date_fn = buffer_dir + f"/{ds}/{ticker}.parquet"
-    dl_fn = dl_ticker_dir + f"/{ticker}.parquet"
-    if len(df_typed_end) > 0:
-        ## save sliced date
-        df_typed_end.to_parquet(buffer_date_fn, index=False)
-
-    df_typed.to_parquet(dl_fn, index=False)
-    return True
-
-
-def collect_generic_ticker(
-    ticker: str,
-    add_ticker: bool,
-    url: str,
-    dl_ticker_dir: str,
-    dtypes: dict,
-    year: float = None,
-):
-    """
-    General FMP collection for tickers.
-
-    Inputs:
-        - ds: Date
-        - ticker: ticker
-        - add_ticker: Is ticker missing from response
-        - url: Base url
-        - dl_ticker_dir: Ticker oriented data-lake location
-        - dtypes: Data types
-    """
-    if year == None:
-        r = requests.get(url.format(TICKER=ticker, API=FMP_KEY))
-    elif year != None:
-        r = requests.get(url.format(TICKER=ticker, YEAR=year, API=FMP_KEY))
-    if r.status_code == 429:
-        return ticker
-    data = r.json()
-    if len(data) == 0:
-        return False
-    df = pd.DataFrame(pd.DataFrame(data))
-    if add_ticker:
-        df["symbol"] = ticker
-    df_typed = utils.format_data(df, dtypes)
-    fn = dl_ticker_dir + f"/{ticker}.parquet"
-    if os.path.isfile(fn):
-        ## not all data come back fill full history
-        old_df = pd.read_parquet(fn)
-        df_typed = df_typed.append(old_df).drop_duplicates(ignore_index=True)
-    df_typed.to_parquet(fn, index=False)
-    return True
-
-
-def collect_generic_page_old(
-    ds: dt.date,
-    ticker: str,
-    add_ticker: bool,
-    url: str,
-    buffer_dir: str,
-    dl_ticker_dir: str,
-    dtypes: dict,
-    date_col: str = "date",
-):
-    """Iterage page count until no more data returns."""
-    dfs = []
-    collect = True
-    page = 0
-    while collect:
-        url_ = url.format(TICKER=ticker, API=FMP_KEY, PAGE=page)
-        r = requests.get(url_)
-        if r.status_code == 429:
-            sleep(5)
-            continue
-        data = r.json()
-        if len(data) == 0:
-            collect = False
-            continue
-        dfs.append(pd.DataFrame(pd.DataFrame(data)))
-        page += 1
-    if len(dfs) == 0:
-        return False
-    df = pd.concat(dfs)
-    if add_ticker:
-        df["symbol"] = ticker
-    df_typed = utils.format_data(df, dtypes)
-    df_typed_end = df_typed.loc[
-        pd.to_datetime(df_typed[date_col]).apply(lambda r: r.date()) == ds
-    ].copy()
-    if len(df_typed_end) > 0:
-        df_typed_end.to_parquet(buffer_dir + f"/{ds}/{ticker}.parquet", index=False)
-    fn = dl_ticker_dir + f"/{ticker}.parquet"
-    if os.path.isfile(fn):
-        ## not all data come back fill full history
-        old_df = pd.read_parquet(fn)
-        df_typed = df_typed.append(old_df).drop_duplicates()
-    df_typed.to_parquet(fn, index=False)
-    return True
+#     Inputs:
+#         - ds: Date
+#         - ticker: ticker
+#         - add_ticker: Is ticker missing from response
+#         - url: Base url
+#         - dl_ticker_dir: Ticker oriented data-lake location
+#         - dtypes: Data types
+#     """
+#     if year == None:
+#         r = requests.get(url.format(TICKER=ticker, API=FMP_KEY))
+#     elif year != None:
+#         r = requests.get(url.format(TICKER=ticker, YEAR=year, API=FMP_KEY))
+#     if r.status_code == 429:
+#         return ticker
+#     data = r.json()
+#     if len(data) == 0:
+#         return False
+#     df = pd.DataFrame(pd.DataFrame(data))
+#     if add_ticker:
+#         df["symbol"] = ticker
+#     df_typed = utils.format_data(df, dtypes)
+#     fn = dl_ticker_dir + f"/{ticker}.parquet"
+#     if os.path.isfile(fn):
+#         ## not all data come back fill full history
+#         old_df = pd.read_parquet(fn)
+#         df_typed = df_typed.append(old_df).drop_duplicates(ignore_index=True)
+#     df_typed.to_parquet(fn, index=False)
+#     return True
 
 
 def collect_generic_page(
@@ -218,102 +121,165 @@ def collect_generic_page(
     return True
 
 
-def collect_generic_distributed_old(
-    get_distribution_list: Callable,
-    dl_loc: str,
-    buffer_loc: str,
-    distribute_through: Callable,
-    spark_app: str,
-    **kwargs,
+# def collect_generic_distributed(
+#     distribute_through: Callable,
+#     spark_app: str,
+#     **kwargs,
+# ):
+#     """
+#     General FMP collection distribute through spark.
+
+#     Inputs:
+#         - distribute_through: Function to to distribute.
+#         - spark_app: Name of the spark app.
+#         - kwargs: Arguments for distribution function.
+#     """
+#     ## collect all
+#     collection_list = utils.get_watchlist(extend=True)
+
+#     print(f"Collect extended watch list {len(collection_list)}")
+#     while len(collection_list) > 0:
+#         distribution_list = [
+#             utils.make_input("ticker", t, kwargs) for t in collection_list
+#         ]
+#         print("PRINT THIS THING!!\n\n\n\n")
+#         print(distribution_list[:5])
+#         print("PRINT THIS THING!!\n\n\n\n")
+#         spark = SparkSession.builder.appName(f"collect-{spark_app}").getOrCreate()
+#         sc = spark.sparkContext
+#         return_list = (
+#             sc.parallelize(distribution_list)
+#             .map(lambda r: distribute_through(**r))
+#             .collect()
+#         )
+#         return_df = pd.DataFrame(return_list, columns=["return"])
+#         bad_response_df = return_df.loc[~return_df["return"].isin([True, False])]
+#         collection_list = bad_response_df["return"].tolist()
+#         sc.stop()
+#         spark.stop()
+
+
+def collect_generic_ticker(
+    ticker: str,
+    add_ticker: bool,
+    url: str,
+    dtypes: dict,
+    year: float = None,
+    end_date: str = None,
 ):
     """
-    General FMP collection distribute through spark.
+    General FMP collection for tickers.
 
     Inputs:
-        - get_distribution_list: Function to get list to distribute.
-        - dl_loc: Final output location.
-        - buffer_loc: Buffer to get list to distribute.
-        - distribute_through: Function to to distribute.
-        - spark_app: Name of the spark app.
-        - kwargs: Arguments for distribution function.
+        - ticker: ticker symbol
+        - add_ticker: Indicates if ticker is missing from response
+        - url: Base URL for API
+        - dl_ticker_dir: Data lake directory for ticker data
+        - dtypes: Data types for formatting DataFrame
+        - year: Specific year for data collection, if applicable
     """
-    ## collect all
-    ds = pd.to_datetime([x for x in os.walk(buffer_loc + "/")][0][1][0]).date()
-    kwargs["ds"] = ds
-    if get_distribution_list == utils.get_to_collect:
-        collection_list = get_distribution_list(buffer_loc)
-    elif get_distribution_list == tda.get_option_collection_list:
-        collection_list = get_distribution_list(ds)
-    elif get_distribution_list == utils.get_watchlist:
-        collection_list = get_distribution_list(extend=True)
-    while len(collection_list) > 0:
-        distribution_list = [
-            utils.make_input("ticker", t, kwargs) for t in collection_list
-        ]
-        spark = SparkSession.builder.appName(f"collect-{spark_app}").getOrCreate()
-        sc = spark.sparkContext
-        return_list = (
-            sc.parallelize(distribution_list)
-            .map(lambda r: distribute_through(**r))
-            .collect()
+    if year:
+        final_url = url.format(TICKER=ticker, YEAR=year, API=FMP_KEY)
+    elif end_date:
+        start_date = end_date - dt.timedelta(2)
+        final_url = url.format(
+            TICKER=ticker, START_DATE=start_date, END_DATE=end_date, API=FMP_KEY
         )
-        return_df = pd.DataFrame(return_list, columns=["return"])
-        bad_response_df = return_df.loc[~return_df["return"].isin([True, False])]
-        collection_list = bad_response_df["return"].tolist()
-        sc.stop()
-        spark.stop()
+    else:
+        final_url = url.format(TICKER=ticker, API=FMP_KEY)
 
-    if len(glob.glob(buffer_loc + f"/{ds}/*.parquet")) > 0:
-        ## migrate from buffer to data-lake
-        spark = SparkSession.builder.appName(f"coalesce-{spark_app}").getOrCreate()
-        (
-            spark.read.format("parquet")
-            .option("path", buffer_loc + f"/{ds}/*.parquet")
-            .load()
-            .write.format("parquet")
-            .mode("overwrite")
-            .save(dl_loc + f"/{ds}", header=True)
-        )
-        spark.stop()
-    utils.clear_buffer(buffer_loc.split("/data/buffer")[1])
+    response = requests.get(final_url)
+    if response.status_code == 429:
+        return "429"  # Throttled
+    data = response.json()
+    if not data:
+        return False
+
+    df = pd.DataFrame(data)
+    if add_ticker:
+        df["symbol"] = ticker
+    df_typed = utils.format_data(df, dtypes)
+    return df_typed
 
 
 def collect_generic_distributed(
     distribute_through: Callable,
     spark_app: str,
+    dl_ticker_dir: str,
+    batch_size: int = 25,
     **kwargs,
 ):
     """
-    General FMP collection distribute through spark.
+    General FMP collection distribute through Spark, managing batch processing and optimized file handling.
 
     Inputs:
-        - distribute_through: Function to to distribute.
-        - spark_app: Name of the spark app.
-        - kwargs: Arguments for distribution function.
+        - distribute_through: Function to distribute collection tasks
+        - spark_app: Name of the Spark app
+        - dl_ticker_dir: Directory to save the collected data
+        - kwargs: Additional keyword arguments for the distribution function
     """
-    ## collect all
-    collection_list = utils.get_watchlist(extend=True)
+    if spark_app == "mxm-collection":
+        ## only collect options data to keep this low on compute for now
+        collection_list = deque(utils.get_distinct_watchlist_symbols('Options Watchlist'))
+    else:
+        collection_list = deque(utils.get_distinct_tickers())
 
-    print(f"Collect extended watch list {len(collection_list)}")
-    while len(collection_list) > 0:
-        distribution_list = [
-            utils.make_input("ticker", t, kwargs) for t in collection_list
+    # Initialize Spark session and context once
+    spark = (
+        SparkSession.builder.appName(f"collect-{spark_app}")
+        .config("spark.driver.host", os.environ["SPARK_LOCAL_IP"])
+        .config("spark.ui.port", "4050")
+        .config("spark.driver.memory", "4g")
+        .config("spark.executor.memory", "4g")
+        .getOrCreate()
+    )
+    sc = spark.sparkContext
+
+    while collection_list:
+        current_batch = [
+            collection_list.popleft()
+            for _ in range(min(batch_size, len(collection_list)))
         ]
-        print("PRINT THIS THING!!\n\n\n\n")
-        print(distribution_list[:5])
-        print("PRINT THIS THING!!\n\n\n\n")
-        spark = SparkSession.builder.appName(f"collect-{spark_app}").getOrCreate()
-        sc = spark.sparkContext
+        distribution_list = [
+            utils.make_input("ticker", t, kwargs) for t in current_batch
+        ]
         return_list = (
             sc.parallelize(distribution_list)
             .map(lambda r: distribute_through(**r))
             .collect()
         )
-        return_df = pd.DataFrame(return_list, columns=["return"])
-        bad_response_df = return_df.loc[~return_df["return"].isin([True, False])]
-        collection_list = bad_response_df["return"].tolist()
-        sc.stop()
-        spark.stop()
+
+        # Process responses and write data
+        to_retry = []
+        for result in return_list:
+            if isinstance(result, pd.DataFrame):
+                ticker = result["symbol"].iloc[0]
+                file_path = os.path.join(dl_ticker_dir, f"{ticker}.parquet")
+                write_data_to_parquet(result, file_path)
+            elif result == "429":
+                index = return_list.index(result)
+                to_retry.append(current_batch[index])
+
+        # Re-queue the tickers that need retry
+        collection_list.extend(to_retry)
+
+    # Clean up Spark session
+    sc.stop()
+    spark.stop()
+
+
+def write_data_to_parquet(df, filepath):
+    """
+    Writes DataFrame to a Parquet file, appending and deduplicating if file exists.
+
+    Args:
+        df (DataFrame): Data to write.
+        filepath (str): File path to write the data to.
+    """
+    if os.path.isfile(filepath):
+        old_df = pd.read_parquet(filepath)
+        df = pd.concat([df, old_df]).drop_duplicates(ignore_index=True)
+    df.to_parquet(filepath, index=False)
 
 
 def distribute_function(method: Callable, spark_app: str):

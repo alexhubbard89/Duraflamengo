@@ -2,13 +2,11 @@ import os
 from datetime import datetime, timedelta
 import pendulum
 from fmp import stocks, macro_econ
-from derived_metrics import crossovers
-from derived_metrics import bull_classifier, bear_classifier
 
 ## airflow
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.models import Variable
 
 pyspark_app_home = Variable.get("PYSPARK_APP_HOME")
@@ -41,40 +39,15 @@ collect_watchlist_daily_price = PythonOperator(
     execution_timeout=timedelta(minutes=10),
 )
 
-technial_analysis_enrich_watchlist = SparkSubmitOperator(
-    task_id="technial_analysis_enrich_watchlist",
-    application=f"{pyspark_app_home}/dags/derived_metrics/runner/technial_analysis_enrich_watchlist.py",
+migrate_daily_price = SparkSubmitOperator(
+    task_id="migrate_daily_price",
+    application=f"{pyspark_app_home}/dags/fmp/runner/migrate_daily_price.py",
     executor_memory="15g",
     driver_memory="15g",
     name="{{ task_instance.task_id }}",
-    execution_timeout=timedelta(minutes=15),
+    execution_timeout=timedelta(minutes=5),
     conf={"master": "spark://localhost:7077"},
     dag=dag,
-    env_vars={"ds": " {{ ts_nodash_with_tz }} "},
-)
-
-predict_all_crossovers = PythonOperator(
-    task_id="predict_all_crossovers",
-    python_callable=crossovers.predict_all_crossovers,
-    op_kwargs={"ds": " {{ ts_nodash_with_tz }} "},
-    dag=dag,
-    execution_timeout=timedelta(minutes=10),
-)
-
-bull_classifier_daily_predict = PythonOperator(
-    task_id="bull_classifier_daily_predict",
-    python_callable=bull_classifier.daily_predict,
-    op_kwargs={"ds": " {{ ts_nodash_with_tz }} "},
-    dag=dag,
-    execution_timeout=timedelta(minutes=10),
-)
-
-bear_classifier_daily_predict = PythonOperator(
-    task_id="bear_classifier_daily_predict",
-    python_callable=bear_classifier.daily_predict,
-    op_kwargs={"ds": " {{ ts_nodash_with_tz }} "},
-    dag=dag,
-    execution_timeout=timedelta(minutes=10),
 )
 
 collect_sector_price_earning_ratio = PythonOperator(
@@ -87,10 +60,8 @@ collect_sector_price_earning_ratio = PythonOperator(
 
 [
     collect_watchlist_daily_price
-    >> technial_analysis_enrich_watchlist
     >> [
-        predict_all_crossovers,
-        bull_classifier_daily_predict,
-        bear_classifier_daily_predict,
-    ]
+        migrate_daily_price,
+    ],
+    collect_sector_price_earning_ratio,
 ]

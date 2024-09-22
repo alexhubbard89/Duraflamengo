@@ -7,17 +7,20 @@ import shutil
 import datetime as dt
 import os
 import glob
-from airflow.models import Variable
 import fmp.settings as fmp_s
 import tda.settings as tda_s
 import common.settings as comm_s
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from distutils.util import strtobool
+from pyspark.sql import DataFrame
+import psycopg2
+from contextlib import contextmanager
 
-sm_data_lake_dir = Variable.get("sm_data_lake_dir")
-BUFFER_DIR = sm_data_lake_dir + "/buffer/{}/"
-DL_WRITE_DIR = sm_data_lake_dir + "/{subdir}/{date}/"
+
+DL_DIR = os.environ["DL_DIR"]
+BUFFER_DIR = DL_DIR + "/buffer/{}/"
+DL_WRITE_DIR = DL_DIR + "/{subdir}/{date}/"
 
 
 ## functions
@@ -35,9 +38,9 @@ def int_extend(column):
     for t, s in zip(int_text, int_scale):
         column = column.apply(lambda row: flip_sign(str(row)))
         column = column.apply(
-            lambda row: int(float(str(row).replace(t, "")) * s)
-            if t in str(row)
-            else row
+            lambda row: (
+                int(float(str(row).replace(t, "")) * s) if t in str(row) else row
+            )
         )
         column = column.apply(lambda row: percent(str(row)))
         column = column.apply(lambda row: np.nan if row == "-" else row)
@@ -317,9 +320,9 @@ def format_data(df: pd.DataFrame, types: dict) -> pd.DataFrame:
             # if not in type then make generic as string
             df[col] = df[col].astype(str)
         elif types[col] == dt.date:
-            df[col] = pd.to_datetime(df[col], errors="coerce").apply(lambda r: r.date())
+            df[col] = pd.to_datetime(df[col], errors="coerce").dt.date
         elif types[col] == dt.datetime:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+            df[col] = pd.to_datetime(df[col], errors="coerce").dt.floor("us")
         elif types[col] == bool:
             df[col] = (
                 df[col]
@@ -328,6 +331,8 @@ def format_data(df: pd.DataFrame, types: dict) -> pd.DataFrame:
                 )
                 .astype(types[col])
             )
+        elif types[col] == float:
+            df[col] = df[col].astype(float).apply(lambda r: round(r, 2))
         else:
             try:
                 df[col] = df[col].astype(types[col])
@@ -418,6 +423,91 @@ def get_watchlist(extend=False) -> list:
         return list(set(watchlist_tda + comm_s.BASE_WATCHLIST))
 
 
+def find_symbols_collected(directory):
+    return [x.replace(".parquet", "") for x in os.listdir(directory)]
+
+
+def get_distinct_tickers():
+    try:
+        # Use the context manager to ensure the connection is handled correctly
+        with get_db_connection() as conn:
+            # Create a cursor object
+            cursor = conn.cursor()
+
+            # SQL to fetch distinct ticker symbols
+            query = "SELECT DISTINCT symbol FROM watchlist;"
+
+            # Execute the query
+            cursor.execute(query)
+
+            # Fetch all distinct ticker symbols
+            tickers = cursor.fetchall()
+
+            # Convert list of tuples to list of strings
+            tickers = [ticker[0] for ticker in tickers]
+
+            # Close the cursor
+            cursor.close()
+
+        return tickers
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
+    
+def get_distinct_watchlist_symbols(watchlist_name):
+    try:
+        # Use the context manager to ensure the connection is handled correctly
+        with get_db_connection() as conn:
+            # Create a cursor object
+            cursor = conn.cursor()
+
+            # SQL to fetch distinct ticker symbols
+            query = f"SELECT DISTINCT symbol FROM watchlist WHERE watchlist_name = '{watchlist_name}';"
+
+            # Execute the query
+            cursor.execute(query)
+
+            # Fetch all distinct ticker symbols
+            tickers = cursor.fetchall()
+
+            # Convert list of tuples to list of strings
+            tickers = [ticker[0] for ticker in tickers]
+
+            # Close the cursor
+            cursor.close()
+
+        return tickers
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
+    
+def get_max_date(tbl, date_column):
+    try:
+        # Use the context manager to ensure the connection is handled correctly
+        with get_db_connection() as conn:
+            # Create a cursor object
+            with conn.cursor() as cursor:
+                # SQL to fetch distinct ticker symbols and their max date
+                query = f"SELECT symbol, MAX({date_column}) AS max_date FROM {tbl} GROUP BY symbol;"
+
+                # Execute the query
+                cursor.execute(query)
+
+                # Fetch all results
+                results = cursor.fetchall()
+
+                # Convert list of tuples to a list of dictionaries for better clarity
+                max_dates = [{'symbol': row[0], 'max_date': row[1]} for row in results]
+
+        return pd.DataFrame(max_dates)
+    except psycopg2.Error as db_error:
+        print(f"Database error occurred: {db_error}")
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return pd.DataFrame()
+
+
 def make_input(key: str, value: str, kwarg_dict: dict):
     new_dict = kwarg_dict.copy()
     new_dict[key] = value
@@ -500,3 +590,47 @@ def mk_dir(directory: str):
     """
     if not os.path.isdir(directory):
         os.mkdir(directory)
+
+
+def write_to_postgres(
+    df: DataFrame,
+    table_name: str,
+    mode: str = "append",
+):
+    """
+    Writes a DataFrame to a PostgreSQL table.
+
+    Args:
+    df (DataFrame): DataFrame to write.
+    table_name (str): The name of the PostgreSQL table.
+    mode (str): Write mode for DataFrame ('overwrite', 'append', etc.).
+    url (str): JDBC connection URL.
+    user (str): Database user.
+    password (str): Database password.
+    driver (str): JDBC driver class.
+    """
+    url = f"jdbc:postgresql://{os.environ.get('MARTY_DB_HOST')}:{os.environ.get('MARTY_DB_PORT', '5432')}/{os.environ.get('MARTY_DB_NAME')}"
+    user = os.environ.get("MARTY_DB_USR")
+    password = os.environ.get("MARTY_DB_PW")
+    driver = "org.postgresql.Driver"
+
+    df.write.format("jdbc").option("url", url).option("dbtable", table_name).option(
+        "user", user
+    ).option("password", password).option("driver", driver).mode(mode).save()
+
+
+# Context manager for database connection
+@contextmanager
+def get_db_connection():
+    conn = psycopg2.connect(
+        dbname=os.environ.get("MARTY_DB_NAME"),
+        user=os.environ.get("MARTY_DB_USR"),
+        password=os.environ.get("MARTY_DB_PW"),
+        host=os.environ.get("MARTY_DB_HOST"),
+        port=os.environ.get("MARTY_DB_PORT", "5432"),
+    )
+    conn.autocommit = True
+    try:
+        yield conn
+    finally:
+        conn.close()

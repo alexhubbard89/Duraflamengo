@@ -20,11 +20,12 @@ class NewsSummarizer:
         model=4,
     ):
         # Initialize NewsSummarizer specific attributes
-        self.symbol_list = symbol_list
         self.date_min = date_min
         self.date_max = date_max
         if watchlist:
             self.symbol_list = list(set(["QQQ"] + utils.get_watchlist(extend=True)))
+        else:
+            self.symbol_list = symbol_list
         # load news
         self.load_news()
         self.format_news()
@@ -41,6 +42,7 @@ class NewsSummarizer:
         It's essential to avoid repeating information and ensure that each section is exhaustively analyzed. 
         When discussing specific stocks, please include their ticker names. 
         The goal is to provide truthful and comprehensive responses to all the specified sections.
+        Please be very descriptive. You are giving an analysis of a wide range of the market. Now is not the time for brevity.
         """
         # set GPT
         if model == 4:
@@ -147,12 +149,19 @@ class NewsSummarizer:
         response = client.beta.threads.messages.list(thread_id=thread.id)
 
         # Open the file for writing
-        json_data = json.loads(response.json())["data"][0]["content"][0]["text"][
-            "value"
-        ]
-        with open(output_fn, "w", encoding="utf-8") as md_file:
-            # Write the content to the Markdown file
-            md_file.write(json_data)
+        json_data = json.loads(response.model_dump_json())["data"][0]["content"][0][
+            "text"
+        ]["value"]
 
         # remove tmp tile
         os.remove(ms.news_input)
+
+        if (
+            "My apologies; it appears there has been an error accessing the file provided."
+            in json_data
+        ):
+            raise TypeError("Could not access data file")
+
+        with open(output_fn, "w", encoding="utf-8") as md_file:
+            # Write the content to the Markdown file
+            md_file.write(json_data)

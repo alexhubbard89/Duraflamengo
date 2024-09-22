@@ -6,7 +6,7 @@ import pendulum
 ## airflow
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.models import Variable
 
 ## get global vars
@@ -28,7 +28,7 @@ dag = DAG(
     dag_id="collect-earnigns",
     default_args=default_args,
     catchup=False,
-    schedule_interval="15 6,18 * * *"
+    schedule_interval="15 6,18 * * *",
     ## At minute 15 past hour 6 and 18
 )
 

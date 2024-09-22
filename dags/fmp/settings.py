@@ -22,29 +22,25 @@ stock_split_calendar = DL_DIR + "/fmp/stock-split-calendar"
 to_collect = DL_DIR + "/fmp/to-collect"
 ## Delisted
 delisted_companies = DL_DIR + "/fmp/delisted-companies/latest.parquet"
+## Current Price
+current_price = DL_DIR + "/fmp/current-price-ticker"
 ## Historical price
-buffer_historical_daily_price_full = DL_DIR + "/buffer/fmp/historical-daily-price-full"
 historical_daily_price_full = DL_DIR + "/fmp/historical-daily-price-full"
 historical_daily_price_full_raw = DL_DIR + "/fmp/historical-daily-price-full-raw"
 historical_ticker_price_full = DL_DIR + "/fmp/historical-ticker-price-full"
 ## Historical price minute
-buffer_historical_thirty_minute_price = (
-    DL_DIR + "/buffer/fmp/historical-thirty-minute-price"
-)
+ticker_minute_price = DL_DIR + "/fmp/ticker-minute-price"
 historical_thirty_minute_price = DL_DIR + "/fmp/historical-thirty-minute-price"
 historical_thirty_minute_ticker_price = (
     DL_DIR + "/fmp/historical-thirty-minute-ticker-price"
 )
 ## Discounted cash flow
-buffer_dcf = DL_DIR + "/buffer/fmp/dcf"
 dcf = DL_DIR + "/fmp/dcf"
 dcf_ticker = DL_DIR + "/fmp/dcf-ticker"
 ## Rating
-buffer_historical_rating = DL_DIR + "/buffer/fmp/historical-rating"
 historical_rating = DL_DIR + "/fmp/historical-rating"
 historical_rating_ticker = DL_DIR + "/fmp/historical-rating-ticker"
 ## Enterprise Values
-buffer_enterprise_values_annual = DL_DIR + "/buffer/fmp/enterprise-values-annual"
 buffer_enterprise_values_quarter = DL_DIR + "/buffer/fmp/enterprise-values-quarter"
 enterprise_values_annual = DL_DIR + "/fmp/enterprise-values-annual"
 enterprise_values_quarter = DL_DIR + "/fmp/enterprise-values-quarter"
@@ -214,9 +210,6 @@ technical_indicator_1_min_rsi = (
 technical_indicator_15_min_rsi = (
     f"{os.environ['DL_DIR']}/fmp/technical_indicator/15-min/rsi"
 )
-
-buffer_shares_float = f"{os.environ['DL_DIR']}/buffer/fmp/shares_float"
-buffer_earning_calendar = f"{os.environ['DL_DIR']}/buffer/fmp/earning_calendar"
 shares_float = f"{os.environ['DL_DIR']}/fmp/shares_float"
 earning_calendar = f"{os.environ['DL_DIR']}/fmp/earning_calendar"
 earning_call_transcript = f"{os.environ['DL_DIR']}/fmp/earnings-transcript"
@@ -242,6 +235,7 @@ IPO_CONFIRMED_CAL = FMP + "/v4/ipo-calendar-confirmed?" + START_END_SUFFIX
 EARNINGS_CONFIRMED_CAL = FMP + "/v4/earning-calendar-confirmed?" + START_END_SUFFIX
 SPLIT_CAL = FMP + "/v3/stock_split_calendar?" + START_END_SUFFIX
 DELISTED_COMPANIES = FMP + "/v3/delisted-companies?page={PAGE}&apikey={API}"
+CURRENT_PRICE = FMP + "/v3/quote/{TICKER}?apikey={API}"
 HISTORICAL_PRICE_FULL = (
     FMP
     + "/v3/historical-price-full/{TICKER}?serietype=bar&from={DSS}&to={DSE}&apikey={API}"
@@ -282,7 +276,10 @@ SECTOR_PE = FMP + "/v4/sector_price_earning_ratio?" + DS_E_SUFFIX
 INDUSTRY_PE = FMP + "/v4/industry_price_earning_ratio?" + DS_E_SUFFIX
 TREASURY = FMP + "/v4/treasury?" + START_END_SUFFIX
 ECONOMIC_INDICATORS = FMP + "/v4/economic?name={INDICATOR}&" + FULL_END_SUFFIX
-ONE_MINUTE_INTRADAY_PRICE = FMP + "/v3/historical-chart/1min/{TICKER}?apikey={API}"
+ONE_MINUTE_INTRADAY_PRICE = (
+    FMP
+    + "/v3/historical-chart/1min/{TICKER}?from={START_DATE}&to={END_DATE}&apikey={API}"
+)
 FIFTEEN_MINUTE_INTRADAY_PRICE = FMP + "/v3/historical-chart/15min/{TICKER}?apikey={API}"
 SMA_9_ONE_MINUTE_TECHNICAL_INDICATOR = (
     FMP + "/v3/technical_indicator/1min/{TICKER}?period=9&type=sma&apikey={API}"
@@ -305,7 +302,7 @@ RSI_FIFTEEN_MINUTE_TECHNICAL_INDICATOR = (
 
 SHARES_FLOAT = FMP + "/v4/shares_float?symbol={TICKER}&apikey={API}"
 EARNINGS_CALENDAR = (
-    FMP + "/v3/historical/earning_calendar/{TICKER}?limit=80&apikey={API}"
+    FMP + "/v3/historical/earning_calendar/{TICKER}?limit=1000&apikey={API}"
 )
 
 EARNINGS_CALL_TRANSCRIPT = (
@@ -997,4 +994,30 @@ earning_call_transcript_types = {
     "year": float,
     "date": dt.datetime,
     "content": str,
+}
+
+current_price_types = {
+    "symbol": str,
+    "name": str,
+    "price": float,
+    "changesPercentage": float,
+    "change": float,
+    "dayLow": float,
+    "dayHigh": float,
+    "yearHigh": float,
+    "yearLow": float,
+    "marketCap": float,
+    "priceAvg50": float,
+    "priceAvg200": float,
+    "exchange": str,
+    "volume": float,
+    "avgVolume": float,
+    "open": float,
+    "previousClose": float,
+    "eps": float,
+    "pe": float,
+    "earningsAnnouncement": str,
+    "sharesOutstanding": float,
+    "timestamp": dt.datetime,
+    "date": dt.date,
 }
